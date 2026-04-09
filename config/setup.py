@@ -1,6 +1,6 @@
 """
 Interactive setup wizard for Ixel MAT.
-OpenClaw-style onboarding experience.
+Guided onboarding experience for configuring providers and agents.
 
 Run with: ixel setup  (or ixel configure)
 """
@@ -538,7 +538,7 @@ def _print_summary_and_write(agents: list[dict]) -> None:
 
 def run_setup() -> None:
     """
-    Interactive setup wizard — OpenClaw-style onboarding.
+    Interactive setup wizard for configuring providers and agents.
 
     Steps:
       1. Welcome screen with current status table
