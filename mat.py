@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Console
@@ -32,7 +34,6 @@ _loaded_secrets = load_env()
 from agents import create_agent
 from modes.full import FullModeDispatcher
 from modes.consensus import run_consensus
-from schema.response import FULL_MODE_SUFFIX, parse_structured_response
 
 # ── IxelOS Palette ────────────────────────────────────────────────────────────
 C = {
@@ -113,7 +114,7 @@ def print_help():
     console.print(f"\n  [{C['gold']}]Ixel MAT[/] [{C['dim']}]— Commands[/]\n")
     cmds = [
         ("/full <prompt>",      "Send prompt to all agents — compare side by side"),
-        ("/consensus <prompt>", "All agents answer, then synthesize ONE best answer"),
+        ("/consensus [flags] <prompt>", "Stream responses, then synthesize once enough valid answers arrive"),
         ("/agents",             "Show connected agent status"),
         ("/config",             "Show resolved config + validation"),
         ("/help",               "Show this help"),
@@ -149,6 +150,47 @@ def _print_answer(text: str):
         for line in text.split("\n"):
             if line.strip():
                 console.print(f"    [{C['moon']}]{line}[/]")
+
+
+@dataclass
+class ConsensusOptions:
+    prompt: str
+    timeout: float = 30.0
+    min_responses: int = 2
+
+
+def parse_consensus_args(raw: str) -> ConsensusOptions:
+    parts = shlex.split(raw)
+    timeout = 30.0
+    min_responses = 2
+    prompt_parts: list[str] = []
+
+    i = 0
+    while i < len(parts):
+        part = parts[i]
+        if part == "--timeout":
+            if i + 1 >= len(parts):
+                raise ValueError("Missing value for --timeout")
+            timeout = float(parts[i + 1])
+            i += 2
+            continue
+        if part == "--min-responses":
+            if i + 1 >= len(parts):
+                raise ValueError("Missing value for --min-responses")
+            min_responses = int(parts[i + 1])
+            i += 2
+            continue
+        prompt_parts = parts[i:]
+        break
+
+    prompt = " ".join(prompt_parts).strip()
+    if not prompt:
+        raise ValueError("Usage: /consensus [--timeout SECONDS] [--min-responses N] <prompt>")
+    if timeout <= 0:
+        raise ValueError("--timeout must be > 0")
+    if min_responses < 1:
+        raise ValueError("--min-responses must be >= 1")
+    return ConsensusOptions(prompt=prompt, timeout=timeout, min_responses=min_responses)
 
 
 async def run_full(prompt: str, agents: dict[str, BaseAgent]):
@@ -192,40 +234,63 @@ async def run_full(prompt: str, agents: dict[str, BaseAgent]):
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
-async def run_consensus_cmd(prompt: str, agents: dict[str, BaseAgent]):
+async def run_consensus_cmd(raw: str, agents: dict[str, BaseAgent]):
     """Run /consensus — all agents answer, then synthesize ONE best answer."""
     connected = [a for a in agents.values() if a.is_connected]
     if not connected:
         console.print(f"  [{C['red']}]No connected agents.[/]")
         return
 
+    try:
+        opts = parse_consensus_args(raw)
+    except ValueError as e:
+        console.print(f"  [{C['gold']}]⚠[/] [{C['dim']}]{e}[/]")
+        return
+
+    prompt = opts.prompt
     console.print(f"\n  [{C['gold']}]▸[/] [{C['moon']}]{prompt}[/]")
-    console.print(f"  [{C['dim']}]consensus mode — {len(connected)} agents[/]\n")
+    console.print(
+        f"  [{C['dim']}]consensus mode — {len(connected)} agents — "
+        f"timeout {int(opts.timeout)}s — min {opts.min_responses} valid[/]\n"
+    )
 
     async def on_phase(msg: str):
         console.print(f"  [{C['violet']}]⟐[/] [{C['dim']}]{msg}[/]")
+
+    async def on_agent_result(resp, included: bool):
+        if resp.degraded:
+            console.print(
+                f"  [{C['gold']}]⚠[/] [{C['blue']}]{resp.agent}[/]  "
+                f"[{C['dim']}]skipped — {resp.answer[:120]}[/]"
+            )
+            return
+
+        status = f"[{C['green']}]✓[/]" if included else f"[{C['gold']}]◌[/]"
+        console.print(
+            f"  {status} [{C['blue']}]{resp.agent}[/]  "
+            f"[{C['dim']}]{resp.latency_ms}ms  {resp.confidence.value}[/]"
+        )
+        short = resp.answer.split("\n")[0][:80] if resp.answer else "(no answer)"
+        console.print(f"    [{C['dim']}]{short}[/]")
+
+    async def on_late_response(resp):
+        console.print(
+            f"  [{C['gold']}]⚠[/] [{C['dim']}]Late response from {resp.agent} — not included in synthesis[/]"
+        )
 
     result = await run_consensus(
         prompt=prompt,
         agents=list(agents.values()),
         on_phase=on_phase,
-        timeout=60.0,
+        on_agent_result=on_agent_result,
+        on_late_response=on_late_response,
+        timeout=opts.timeout,
+        min_responses=opts.min_responses,
     )
 
     if "error" in result:
         console.print(f"  [{C['red']}]{result['error']}[/]")
         return
-
-    # Show Phase 1 results briefly
-    console.print(f"\n  [{C['dim']}]── Individual Responses ──[/]")
-    for name, reply, ms in result["phase1_responses"]:
-        parsed = parse_structured_response(name, reply, ms)
-        status = f"[{C['green']}]✓[/]" if not parsed.degraded else f"[{C['gold']}]⚠[/]"
-        confidence = parsed.confidence.value if not parsed.degraded else "degraded"
-        # Show just the first line of answer
-        short = parsed.answer.split("\n")[0][:80] if parsed.answer else "(no answer)"
-        console.print(f"    {status} [{C['blue']}]{name}[/]  [{C['dim']}]{ms}ms  {confidence}[/]")
-        console.print(f"      [{C['dim']}]{short}[/]")  # summary line only, no markdown needed
 
     # Show the consensus
     consensus = result["consensus"]
@@ -250,8 +315,8 @@ async def run_consensus_cmd(prompt: str, agents: dict[str, BaseAgent]):
         console.print(f"  [{C['dim']}]Next:[/] {consensus.followup}")
 
     console.print(
-        f"\n  [{C['dim']}]── /consensus ── {len(result['phase1_responses'])} agents ── "
-        f"synthesized by {synth} ── {total}ms total ──[/]\n"
+        f"\n  [{C['dim']}]── /consensus ── {len(result['included_phase1'])} included"
+        f" / {len(result['phase1_responses'])} seen ── synthesized by {synth} ── {total}ms total ──[/]\n"
     )
 
 
@@ -309,11 +374,7 @@ async def main():
             elif text == "/config":
                 print_config_status(_CONFIG)
             elif text.startswith("/consensus "):
-                prompt = text[11:].strip()
-                if prompt:
-                    await run_consensus_cmd(prompt, agents)
-                else:
-                    console.print(f"  [{C['dim']}]Usage: /consensus <prompt>[/]")
+                await run_consensus_cmd(text[11:].strip(), agents)
             elif text.startswith("/"):
                 console.print(f"  [{C['dim']}]Unknown command. Try /help[/]")
             else:
