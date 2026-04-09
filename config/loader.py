@@ -117,10 +117,11 @@ def _resolve_token(agent_data: dict) -> str:
     return ""
 
 
-def build_agent_configs(config: dict[str, Any]) -> dict[str, AgentConfig]:
+def build_agent_configs(config: dict[str, Any]) -> tuple[dict[str, AgentConfig], list[str]]:
     """
     Build AgentConfig objects from loaded config.
-    Returns dict of name → AgentConfig.
+    Returns (configs, warnings) where configs is dict of name → AgentConfig
+    and warnings is a list of non-fatal issues (e.g. missing tokens).
     """
     agents_data = config.get("agents", {})
     configs: dict[str, AgentConfig] = {}
