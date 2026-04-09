@@ -176,7 +176,7 @@ def validate_config(config: dict[str, Any]) -> list[str]:
             continue
 
         agent_type = data.get("type", "")
-        if agent_type not in ("websocket", "http", "subprocess"):
+        if agent_type not in ("websocket", "http", "subprocess", "oneshot"):
             issues.append(f"Agent '{name}': unknown type '{agent_type}'")
 
         if agent_type == "websocket":
@@ -190,6 +190,32 @@ def validate_config(config: dict[str, Any]) -> list[str]:
             if not token:
                 env_name = data.get("token_env", "IXELMAT_GATEWAY_TOKEN")
                 issues.append(f"Agent '{name}': token not set (need: export {env_name}=...)")
+
+        if agent_type == "http":
+            url = data.get("url", "")
+            if not url:
+                issues.append(f"Agent '{name}': missing url")
+            elif not url.startswith(("http://", "https://")):
+                issues.append(f"Agent '{name}': url must start with http:// or https://")
+
+            token = _resolve_token(data)
+            if not token:
+                env_name = data.get("token_env", "")
+                issues.append(f"Agent '{name}': API key not set (need: {env_name})")
+
+            model = data.get("model", "")
+            if not model:
+                issues.append(f"Agent '{name}': missing model (e.g. gpt-5.4, grok-4)")
+
+        if agent_type == "subprocess":
+            command = data.get("command", "")
+            if not command:
+                issues.append(f"Agent '{name}': missing command")
+
+        if agent_type == "oneshot":
+            command = data.get("command", "")
+            if not command:
+                issues.append(f"Agent '{name}': missing command")
 
         if not data.get("label"):
             issues.append(f"Agent '{name}': missing label")
