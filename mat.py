@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import select
 import shlex
 import sys
 import time
@@ -54,6 +55,7 @@ console = Console()
 # ── Config-driven agents ──────────────────────────────────────────────────────
 _CONFIG = load_config()
 _AGENT_CONFIGS, _CONFIG_WARNINGS = build_agent_configs(_CONFIG)
+_PASTE_STATE = {"count": 0}
 
 
 # ── Splash ────────────────────────────────────────────────────────────────────
@@ -166,6 +168,55 @@ def _response_attr(response, key: str, default=None):
 
 def _format_elapsed(seconds: float) -> str:
     return f"{max(seconds, 0):.1f}s"
+
+
+def format_prompt_preview(text: str, paste_state: dict[str, int] | None = None) -> str:
+    stripped = text.strip()
+    lines = stripped.splitlines()
+    if len(lines) <= 1 and len(stripped) <= 240:
+        return stripped
+    state = paste_state if paste_state is not None else _PASTE_STATE
+    state["count"] = state.get("count", 0) + 1
+    extra_lines = max(len(lines) - 1, 0)
+    if extra_lines > 0:
+        return f"[paste #{state['count']} +{extra_lines} lines]"
+    return f"[paste #{state['count']} +{max(len(stripped) - 1, 0)} chars]"
+
+
+async def _prompt_async(label: str) -> str:
+    return await asyncio.to_thread(Prompt.ask, label)
+
+
+async def read_burst_submission(
+    prompt_fn,
+    main_prompt: str,
+    continuation_prompt: str | None = None,
+    burst_window: float = 0.05,
+    stdin=None,
+    select_fn=None,
+) -> str:
+    first = await prompt_fn(main_prompt)
+    parts = [first]
+    if "\n" in first:
+        return first
+
+    stream = stdin or sys.stdin
+    selector = select_fn or select.select
+    if not hasattr(stream, "readline"):
+        return first
+
+    while True:
+        try:
+            ready, _, _ = selector([stream], [], [], burst_window)
+        except Exception:
+            break
+        if not ready:
+            break
+        nxt = stream.readline()
+        if nxt == "":
+            break
+        parts.append(str(nxt).rstrip("\r\n"))
+    return "\n".join(parts)
 
 
 def build_full_status_lines(agent_states: dict[str, dict], now: float | None = None) -> list[str]:
@@ -322,13 +373,14 @@ async def run_full(prompt: str, agents: dict[str, BaseAgent]):
     dispatch_task = asyncio.create_task(
         dispatcher.dispatch(prompt, on_agent_start=on_start, on_agent_done=on_done)
     )
+    prompt_preview = format_prompt_preview(prompt)
 
-    with Live(_build_full_renderable(prompt, agent_states), console=console, refresh_per_second=10) as live:
+    with Live(_build_full_renderable(prompt_preview, agent_states), console=console, refresh_per_second=10) as live:
         while not dispatch_task.done():
-            live.update(_build_full_renderable(prompt, agent_states))
+            live.update(_build_full_renderable(prompt_preview, agent_states))
             await asyncio.sleep(0.1)
         result = await dispatch_task
-        live.update(_build_full_renderable(prompt, agent_states))
+        live.update(_build_full_renderable(prompt_preview, agent_states))
 
     # Summary
     valid = sum(1 for r in result.responses if not r.degraded)
@@ -355,7 +407,8 @@ async def run_consensus_cmd(raw: str, agents: dict[str, BaseAgent]):
         return
 
     prompt = opts.prompt
-    console.print(f"\n  [{C['gold']}]▸[/] [{C['moon']}]{prompt}[/]")
+    prompt_preview = format_prompt_preview(prompt)
+    console.print(f"\n  [{C['gold']}]▸[/] [{C['moon']}]{prompt_preview}[/]")
     console.print(
         f"  [{C['dim']}]consensus mode — {len(connected)} agents — "
         f"timeout {int(opts.timeout)}s — min {opts.min_responses} valid[/]\n"
@@ -458,7 +511,12 @@ async def main():
     try:
         while True:
             try:
-                user_input = Prompt.ask(f"  [{C['violet']}]⚕[/] [{C['dim']}]❯[/]")
+                user_input = await read_burst_submission(
+                    _prompt_async,
+                    main_prompt=f"  [{C['violet']}]⚕[/] [{C['dim']}]❯[/]",
+                    continuation_prompt=f"  [{C['violet']}]⚕[/] [{C['dim']}]…[/]",
+                    burst_window=0.05,
+                )
             except (EOFError, KeyboardInterrupt):
                 break
 
