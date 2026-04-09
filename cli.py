@@ -47,7 +47,8 @@ def print_banner():
 def cmd_help():
     print_banner()
     cmds = [
-        ("ixel",          "Launch the multi-agent terminal"),
+        ("ixel",          "Launch MAT CLI (Rich panels + /full + /consensus)"),
+        ("ixel tui",      "Launch interactive Textual TUI"),
         ("ixel setup",    "Interactive setup — configure agents + API keys"),
         ("ixel config",   "Show resolved config, tokens, validation status"),
         ("ixel agents",   "List agents + test connectivity"),
@@ -195,9 +196,15 @@ def cmd_doctor():
 
 
 def cmd_run():
-    """Launch the main MAT terminal."""
+    """Launch the Rich CLI multi-agent terminal (mat.py)."""
     from mat import main
     asyncio.run(main())
+
+
+def cmd_tui():
+    """Launch the Textual interactive TUI (main.py)."""
+    from main import IxelMATApp
+    IxelMATApp().run()
 
 
 def main():
@@ -206,6 +213,7 @@ def main():
 
     commands = {
         "":        cmd_run,
+        "tui":     cmd_tui,
         "setup":   cmd_setup,
         "config":  cmd_config,
         "agents":  cmd_agents,
