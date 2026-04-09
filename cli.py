@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from rich.console import Console
 
 from ixel_commands import build_help_rows, resolve_command_name
+from ixel_hyperlinks import hyperlink_text
 
 
 def classify_probe_status(ok: bool, message: str) -> tuple[str, str]:
@@ -242,7 +243,9 @@ def cmd_status():
     print_banner()
     console.print(f"  [{C['gold']}]Status Dashboard[/]\n")
     console.print(f"  [{C['blue']}]Version[/] [{C['moon']}]v{VERSION}[/]  [{C['dim']}]Python {sys.version.split()[0]}[/]")
-    console.print(f"  [{C['blue']}]Config source[/] [{C['dim']}]{config_path}[/]\n")
+    console.print(f"  [{C['blue']}]Config source[/]", end=" ")
+    console.print(hyperlink_text(str(config_path)))
+    console.print()
 
     ptable = Table(
         title=f"[{C['gold']}]Providers[/]",
@@ -318,7 +321,7 @@ def cmd_status():
     stable.add_column("Perms", style=C["dim"], min_width=8)
     stable.add_column("Last Modified", style=C["dim"], min_width=20)
     stable.add_row(
-        str(secret_path),
+        hyperlink_text(str(secret_path)),
         f"[{C['green']}]✓[/]" if secret_status["exists"] else f"[{C['red']}]✗[/]",
         str(secret_status["permissions_octal"]),
         str(secret_status["last_modified"]),

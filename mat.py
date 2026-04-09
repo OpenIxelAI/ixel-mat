@@ -31,6 +31,7 @@ from agents.base import AgentConfig, BaseAgent
 from config.secrets import load_env, secrets_exist
 from config.loader import load_config, build_agent_configs, validate_config, print_config_status
 from ixel_commands import build_help_rows, resolve_command_name
+from ixel_hyperlinks import hyperlink_text
 
 # Load secrets from ~/.config/ixel-mat/.env FIRST (before config reads token_env)
 _loaded_secrets = load_env()
@@ -148,7 +149,9 @@ def _print_answer(text: str):
         # Wrap plain text nicely
         for line in text.split("\n"):
             if line.strip():
-                console.print(f"    [{C['moon']}]{line}[/]")
+                linked = hyperlink_text(f"    {line}")
+                linked.stylize(C["moon"], 0, len(linked.plain))
+                console.print(linked, overflow="fold")
 
 
 def _response_attr(response, key: str, default=None):
