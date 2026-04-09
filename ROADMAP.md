@@ -5,7 +5,7 @@ Last updated: 2026-04-08
 
 ---
 
-## Consensus from All Reviewers (Codex, GPT-5.4, Cursor, Jose)
+## Consensus from All Reviewers (Codex, GPT-5.4, Cursor, Claude)
 
 Four independent reviews all converged on the same priorities:
 
@@ -18,7 +18,7 @@ Four independent reviews all converged on the same priorities:
 - [ ] **Per-request session isolation** — `agent:NAME:main:full:<uuid>` per /full call
 - [ ] **RunId correlation** — tie `_chat_final` to specific runId, not global event
 - [ ] **Config loader** — load agents from `~/.config/ixel-mat/config.toml`
-- [ ] **Secret interpolation** — `token = "${CLAWTTY_GATEWAY_TOKEN}"` in config
+- [ ] **Secret interpolation** — `token = "${IXELMAT_GATEWAY_TOKEN}"` in config
 - [ ] **`mat config validate`** — show resolved config + missing env vars
 
 ### 🟡 v0.2 — Week 2 (UX + transport)
@@ -53,7 +53,7 @@ Four independent reviews all converged on the same priorities:
 
 ---
 
-## The Hierarchy Idea (Angel's vision)
+## The Hierarchy Idea (IxelAI vision)
 
 > "Wondering if a hierarchy approach can help — the hierarchy set by the user,
 > or if Ixel MAT would be at the top of the hierarchy"

@@ -1,6 +1,6 @@
-# ClawTTY TUI — Multi-Agent Terminal Architecture
+# Ixel MAT — Multi-Agent Terminal Architecture
 
-**Version:** 0.2 — Post-Consensus (Jose + Hermes + Cursor + GPT 5.4)  
+**Version:** 0.2 — Post-Consensus (IxelAI multi-agent stack)  
 **Date:** 2026-04-08  
 
 **Pitch:** A unified terminal workspace for AI agents, with consistent commands and better session control.
@@ -44,7 +44,7 @@ Each responds in their own pane (split view or sequential).
 
 **Critical (from GPT 5.4):** /full must normalize outputs into structured format:
 ```
-┌─ Jose (Claude) ──────────────────────────────────┐
+┌─ Main Agent (Claude) ──────────────────────────────────┐
 │ Answer: OSPF selects routes by lowest cost       │
 │ Confidence: High                                 │
 │ Evidence: RFC 2328 §16.1                         │
@@ -75,7 +75,7 @@ the defense against this.
 
 | Agent | Protocol | How |
 |---|---|---|
-| OpenClaw/Jose | WebSocket | ws://127.0.0.1:18789 + token |
+| OpenClaw Agent | WebSocket | ws://127.0.0.1:18789 + token |
 | Hermes | Local subprocess | hermes --resume <session_id> |
 
 ### Future Transports (verify with spikes before committing)
@@ -92,9 +92,9 @@ Each new transport gets a tiny spike first.
 
 ## Session Management — THE Star Feature
 
-This is what separates ClawTTY from just opening two terminals.
+This is what separates Ixel MAT from just opening two terminals.
 OpenClaw has persistent sessions. Hermes starts fresh. This mismatch 
-is the pain. ClawTTY smooths it.
+is the pain. Ixel MAT smooths it.
 
 ### Per-Agent Session Config
 ```toml
@@ -141,7 +141,7 @@ last_session_id = "20260408_020000_abc123"
 ### Visible Session State in UI
 ```
 ┌─────────────────────────────────────────────────────┐
-│  CLAWTTY  │ [1:Jose ●] [2:Hermes ○]                 │
+│  IXEL MAT  │ [1:Main ●] [2:Hermes ○]                 │
 │           │ Session: persistent │ 47 messages │ 2h    │
 ├─────────────────────────────────────────────────────┤
 ```
@@ -176,14 +176,14 @@ For MVP, display both raw AND structured side by side.
 ### Single Agent View
 ```
 ┌─────────────────────────────────────────────────────┐
-│  CLAWTTY  │ [1:Jose ●] [2:Hermes ○]                 │
+│  IXEL MAT  │ [1:Main ●] [2:Hermes ○]                 │
 │           │ Session: persistent │ Connected           │
 ├─────────────────────────────────────────────────────┤
 │                                                     │
 │  You 02:30                                          │
 │  explain OSPF route selection                       │
 │                                                     │
-│  Jose 02:31                                         │
+│  Agent 02:31                                         │
 │  OSPF selects routes based on lowest cost...        │
 │                                                     │
 ├─────────────────────────────────────────────────────┤
@@ -194,9 +194,9 @@ For MVP, display both raw AND structured side by side.
 ### /full Split View
 ```
 ┌──────────────────────┬──────────────────────────────┐
-│  CLAWTTY  │ /full    │ 2 agents │ 1.2s / 2.8s       │
+│  IXEL MAT  │ /full    │ 2 agents │ 1.2s / 2.8s       │
 ├──────────────────────┼──────────────────────────────┤
-│  Jose (Claude)       │  Hermes (Gemini)              │
+│  Main Agent (Claude)       │  Hermes (Gemini)              │
 │  ─────────────────── │  ──────────────────────────── │
 │  Answer:             │  Answer:                      │
 │  Cost = 10^8/bw ...  │  Lowest cost path wins...     │
@@ -251,7 +251,7 @@ clawtty-tui/
 
 ## Dogfooding Plan (7 days)
 
-Use ClawTTY for real work every day. Track:
+Use Ixel MAT for real work every day. Track:
 
 | Metric | What It Tells You |
 |---|---|
@@ -291,7 +291,7 @@ This architecture was created by manually running `/max` mode:
 - 4 agents reviewed the same concept
 - Each caught things others missed
 - The final plan is better than any single agent produced
-- Jose missed session UX and scoping risks
+- Dev note: session UX and scoping risks
 - Hermes was too optimistic on adoption
 - Cursor caught group hallucination risk
 - GPT 5.4 gave the tightest scope and best pitch

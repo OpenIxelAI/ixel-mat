@@ -56,8 +56,8 @@ def run_setup():
     if has_openclaw:
         token = Prompt.ask(f"  [{C['moon']}]Gateway token[/]")
         if token.strip():
-            save_secret("CLAWTTY_GATEWAY_TOKEN", token.strip())
-            os.environ["CLAWTTY_GATEWAY_TOKEN"] = token.strip()
+            save_secret("IXELMAT_GATEWAY_TOKEN", token.strip())
+            os.environ["IXELMAT_GATEWAY_TOKEN"] = token.strip()
             console.print(f"  [{C['green']}]✓[/] [{C['dim']}]Token saved[/]\n")
 
             # Add default OpenClaw agents
@@ -65,15 +65,15 @@ def run_setup():
 [agents.jose]
 type = "websocket"
 url = "ws://127.0.0.1:18789"
-token_env = "CLAWTTY_GATEWAY_TOKEN"
+token_env = "IXELMAT_GATEWAY_TOKEN"
 session_key = "agent:main:main"
-label = "Jose (OpenClaw)"
+label = "Main Agent (OpenClaw)"
 color = "cyan"
 
 [agents.hermes]
 type = "websocket"
 url = "ws://127.0.0.1:18789"
-token_env = "CLAWTTY_GATEWAY_TOKEN"
+token_env = "IXELMAT_GATEWAY_TOKEN"
 session_key = "agent:hermes:main"
 label = "Hermes (OpenClaw)"
 color = "yellow"

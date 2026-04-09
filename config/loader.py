@@ -36,15 +36,15 @@ _DEFAULT_AGENTS = {
     "jose": {
         "type": "websocket",
         "url": "ws://127.0.0.1:18789",
-        "token_env": "CLAWTTY_GATEWAY_TOKEN",
+        "token_env": "IXELMAT_GATEWAY_TOKEN",
         "session_key": "agent:main:main",
-        "label": "Jose (OpenClaw)",
+        "label": "Main Agent (OpenClaw)",
         "color": "cyan",
     },
     "hermes": {
         "type": "websocket",
         "url": "ws://127.0.0.1:18789",
-        "token_env": "CLAWTTY_GATEWAY_TOKEN",
+        "token_env": "IXELMAT_GATEWAY_TOKEN",
         "session_key": "agent:hermes:main",
         "label": "Hermes (OpenClaw)",
         "color": "yellow",
@@ -134,7 +134,7 @@ def build_agent_configs(config: dict[str, Any]) -> dict[str, AgentConfig]:
         agent_type = data.get("type", "websocket")
 
         if agent_type == "websocket" and not token:
-            env_name = data.get("token_env", "CLAWTTY_GATEWAY_TOKEN")
+            env_name = data.get("token_env", "IXELMAT_GATEWAY_TOKEN")
             warnings.append(
                 f"Agent '{name}': no token found. Set env var: export {env_name}=<your_token>"
             )
@@ -187,7 +187,7 @@ def validate_config(config: dict[str, Any]) -> list[str]:
 
             token = _resolve_token(data)
             if not token:
-                env_name = data.get("token_env", "CLAWTTY_GATEWAY_TOKEN")
+                env_name = data.get("token_env", "IXELMAT_GATEWAY_TOKEN")
                 issues.append(f"Agent '{name}': token not set (need: export {env_name}=...)")
 
         if not data.get("label"):

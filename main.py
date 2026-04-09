@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ClawTTY TUI — Multi-agent terminal prototype."""
+"""Ixel MAT — Multi-Agent Terminal by IxelAI."""
 
 from __future__ import annotations
 
@@ -23,27 +23,27 @@ from session.manager import SessionManager
 # ── Theme ─────────────────────────────────────────────────────────────────────
 # IxelOS palette by default. Override any color via env vars.
 THEME = {
-    "bg":        os.getenv("CLAWTTY_THEME_BG",      "#070b14"),  # space black
-    "bg2":       os.getenv("CLAWTTY_THEME_BG2",     "#0d1b2a"),  # navy
-    "fg":        os.getenv("CLAWTTY_THEME_FG",      "#c8d8e8"),  # moonstone
-    "accent":    os.getenv("CLAWTTY_THEME_ACCENT",  "#7eb8d4"),  # lunar blue
-    "accent2":   os.getenv("CLAWTTY_THEME_ACCENT2", "#9b7fc7"),  # violet
-    "gold":      os.getenv("CLAWTTY_THEME_GOLD",    "#d4af37"),  # gold
-    "dim":       os.getenv("CLAWTTY_THEME_DIM",     "#6b7d94"),  # dim
-    "error":     os.getenv("CLAWTTY_THEME_ERROR",   "#e05252"),  # red
-    "success":   os.getenv("CLAWTTY_THEME_SUCCESS", "#4ade80"),  # green
+    "bg":        os.getenv("IXELMAT_THEME_BG",      "#070b14"),  # space black
+    "bg2":       os.getenv("IXELMAT_THEME_BG2",     "#0d1b2a"),  # navy
+    "fg":        os.getenv("IXELMAT_THEME_FG",      "#c8d8e8"),  # moonstone
+    "accent":    os.getenv("IXELMAT_THEME_ACCENT",  "#7eb8d4"),  # lunar blue
+    "accent2":   os.getenv("IXELMAT_THEME_ACCENT2", "#9b7fc7"),  # violet
+    "gold":      os.getenv("IXELMAT_THEME_GOLD",    "#d4af37"),  # gold
+    "dim":       os.getenv("IXELMAT_THEME_DIM",     "#6b7d94"),  # dim
+    "error":     os.getenv("IXELMAT_THEME_ERROR",   "#e05252"),  # red
+    "success":   os.getenv("IXELMAT_THEME_SUCCESS", "#4ade80"),  # green
 }
 
-_GW_TOKEN = os.getenv("CLAWTTY_GATEWAY_TOKEN", "")
+_GW_TOKEN = os.getenv("IXELMAT_GATEWAY_TOKEN", "")
 
 AGENT_CONFIGS = {
     "jose": AgentConfig(
         name="jose",
-        label="Jose (OpenClaw)",
+        label="Main Agent (OpenClaw)",
         type="websocket",
         url="ws://127.0.0.1:18789",
         token=_GW_TOKEN,
-        session_key=os.getenv("CLAWTTY_SESSION_KEY", "agent:main:main"),
+        session_key=os.getenv("IXELMAT_SESSION_KEY", "agent:main:main"),
         auto_resume=True,
     ),
     "hermes": AgentConfig(
@@ -58,7 +58,7 @@ AGENT_CONFIGS = {
 }
 
 
-class ClawTTYApp(App):
+class IxelMATApp(App):
     ANSI_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
     OSC_RE = re.compile(r"\x1B\].*?(?:\x07|\x1B\\)")
     CONTROL_RE = re.compile(r"[\x00-\x08\x0B-\x1F\x7F]")
@@ -88,8 +88,8 @@ class ClawTTYApp(App):
 
     CSS = _build_css.__func__(None)
 
-    TITLE = "ClawTTY"
-    SUB_TITLE = "Agent: Jose (OpenClaw)"
+    TITLE = "Ixel MAT"
+    SUB_TITLE = "Ixel MAT — Multi-Agent Terminal"
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -116,7 +116,7 @@ class ClawTTYApp(App):
         if not AGENT_CONFIGS["jose"].token:
             chat = self.query_one("#chat", RichLog)
             chat.write(
-                "[yellow]Gateway token not set. Export CLAWTTY_GATEWAY_TOKEN before using Jose.[/]"
+                "[yellow]Gateway token not set. Export IXELMAT_GATEWAY_TOKEN before connecting to OpenClaw.[/]"
             )
         # Auto-connect ALL agents so /full works immediately
         for name in self.agents:
@@ -332,7 +332,7 @@ class ClawTTYApp(App):
         chat = self.query_one("#chat", RichLog)
         chat.write(
             "[bold cyan]╔══════════════════════════════════════╗[/]\n"
-            "[bold cyan]║  CLAWTTY TUI  —  Multi-Agent Terminal ║[/]\n"
+            "[bold cyan]║  Ixel MAT  —  Multi-Agent Terminal ║[/]\n"
             "[bold cyan]╚══════════════════════════════════════╝[/]\n"
         )
         chat.write("[dim]Use /help for commands.[/]")
@@ -366,7 +366,7 @@ class ClawTTYApp(App):
 
 
 def main() -> None:
-    ClawTTYApp().run()
+    IxelMATApp().run()
 
 
 if __name__ == "__main__":

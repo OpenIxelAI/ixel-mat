@@ -9,7 +9,7 @@ CONFIG_DIR = Path.home() / ".clawtty"
 SESSION_FILE = CONFIG_DIR / "sessions.json"
 
 class SessionManager:
-    """Manages persistent session state across all ClawTTY agents."""
+    """Manages persistent session state across all Ixel MAT agents."""
     
     def __init__(self):
         self.state: Dict[str, Any] = {}

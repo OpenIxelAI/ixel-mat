@@ -14,7 +14,7 @@ from typing import AsyncIterator, Callable, Awaitable, Optional
 class AgentConfig:
     """Configuration for a single agent."""
     name: str               # internal id: "jose", "hermes"
-    label: str              # display name: "Jose (OpenClaw)"
+    label: str              # display name e.g. "Claude", "Grok"
     type: str               # transport: "websocket", "subprocess", "acp", "api"
     color: str = "cyan"     # TUI color
 
