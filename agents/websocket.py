@@ -32,7 +32,7 @@ import websockets.exceptions
 
 from agents.base import AgentConfig, BaseAgent
 
-_KEY_DIR  = Path.home() / ".config" / "clawtty"
+_KEY_DIR  = Path.home() / ".config" / "ixel-mat"
 _KEY_FILE = _KEY_DIR / "device_key"
 
 
@@ -69,7 +69,18 @@ def _sign(priv, payload: str) -> str:
 
 class WebSocketAgent(BaseAgent):
 
-    def __init__(self, config: AgentConfig, response_timeout: float = 120.0):
+    def __init__(self, config: AgentConfig, response_timeout: float = 60.0):
+        """Create a WebSocketAgent.
+
+        Args:
+            response_timeout: How long (seconds) send_and_receive() waits for
+                a state=final event before raising TimeoutError.  Defaults to
+                60 s to match FullModeDispatcher.timeout so the two layers
+                fire at the same threshold.  When FullModeDispatcher wraps
+                send_and_receive() in its own asyncio.wait_for, the outer
+                timeout governs /full mode; this inner timeout applies when
+                the agent is used standalone (e.g. mat.py single-query mode).
+        """
         super().__init__(config)
         self.response_timeout = response_timeout
         self._ws = None
@@ -346,9 +357,13 @@ class WebSocketAgent(BaseAgent):
                         completed_run_id = payload.get("runId", "")
                         evt = self._run_completions.get(completed_run_id)
                         if evt:
+                            # send_and_receive() is waiting — signal it
                             evt.set()
-                        # If no one is waiting for this runId, ignore it
-                        # (could be from another client or a stale session)
+                        elif self._listen_callback:
+                            # fire-and-forget send() path — forward text to listener
+                            asyncio.create_task(
+                                self._forward_to_listener(payload)
+                            )
 
                 # ping → pong
                 elif ftype == "ping":
@@ -376,6 +391,26 @@ class WebSocketAgent(BaseAgent):
             self._pending.clear()
 
     # ── helpers ───────────────────────────────────────────────────────────────
+
+    async def _forward_to_listener(self, payload: dict) -> None:
+        """Fetch the latest reply and forward it to the listen() callback.
+
+        Called from _reader_loop when a chat state=final event arrives for a
+        session that no send_and_receive() is waiting on (i.e. a plain send()
+        fire-and-forget message).
+        """
+        if not self._listen_callback:
+            return
+        try:
+            # Gateway includes sessionKey in the chat event payload
+            session_key = payload.get("sessionKey", "") or self._session_key
+            text = await self._fetch_reply(session_key=session_key)
+            if text:
+                await self._listen_callback(text)
+        except Exception as exc:
+            import logging
+            logging.getLogger("ixel-mat.ws").debug(
+                "listen callback error for '%s': %s", self.name, exc)
 
     def _extract_text(self, content) -> str:
         if isinstance(content, str):

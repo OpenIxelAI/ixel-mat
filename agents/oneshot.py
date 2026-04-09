@@ -9,7 +9,7 @@ from typing import Awaitable, Callable
 
 from agents.base import AgentConfig, BaseAgent
 
-logger = logging.getLogger("clawtty.agents.oneshot")
+logger = logging.getLogger("ixel_mat.agents.oneshot")
 
 # Strip ANSI escape sequences
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[^\[\]][^a-zA-Z]*[a-zA-Z]?')

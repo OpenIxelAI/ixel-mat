@@ -13,7 +13,7 @@ from typing import Awaitable, Callable
 
 from agents.base import AgentConfig, BaseAgent
 
-logger = logging.getLogger("clawtty.agents.subprocess")
+logger = logging.getLogger("ixel_mat.agents.subprocess")
 
 
 class SubprocessAgent(BaseAgent):

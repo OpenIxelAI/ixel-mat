@@ -3,9 +3,9 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger("clawtty.session.manager")
+logger = logging.getLogger("ixel_mat.session.manager")
 
-CONFIG_DIR = Path.home() / ".clawtty"
+CONFIG_DIR = Path.home() / ".config" / "ixel-mat"
 SESSION_FILE = CONFIG_DIR / "sessions.json"
 
 class SessionManager:
