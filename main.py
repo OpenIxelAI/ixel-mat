@@ -14,10 +14,21 @@ from textual.containers import Vertical
 from textual.widgets import Footer, Header, Input, RichLog
 
 from agents.base import AgentConfig
+from agents.http import HttpAgent
 from agents.oneshot import OneShotAgent
 from agents.websocket import WebSocketAgent
+from config.secrets import load_env
+from config.loader import build_agent_configs, load_config
 from modes.full import FullModeDispatcher
 from session.manager import SessionManager
+
+# Load secrets from ~/.config/ixel-mat/.env before config reads token_env
+load_env()
+
+# ── Config-driven agents ──────────────────────────────────────────────────────
+# Loads from ~/.config/ixel-mat/config.toml (or defaults when absent).
+_CONFIG = load_config()
+AGENT_CONFIGS, _CONFIG_WARNINGS = build_agent_configs(_CONFIG)
 
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
@@ -34,28 +45,7 @@ THEME = {
     "success":   os.getenv("IXELMAT_THEME_SUCCESS", "#4ade80"),  # green
 }
 
-_GW_TOKEN = os.getenv("IXELMAT_GATEWAY_TOKEN", "")
 
-AGENT_CONFIGS = {
-    "jose": AgentConfig(
-        name="jose",
-        label="Main Agent (OpenClaw)",
-        type="websocket",
-        url="ws://127.0.0.1:18789",
-        token=_GW_TOKEN,
-        session_key=os.getenv("IXELMAT_SESSION_KEY", "agent:main:main"),
-        auto_resume=True,
-    ),
-    "hermes": AgentConfig(
-        name="hermes",
-        label="Hermes (OpenClaw)",
-        type="websocket",
-        url="ws://127.0.0.1:18789",
-        token=_GW_TOKEN,
-        session_key="agent:hermes:main",
-        auto_resume=True,
-    ),
-}
 
 
 class IxelMATApp(App):
@@ -103,21 +93,26 @@ class IxelMATApp(App):
 
     async def on_mount(self) -> None:
         self.session_manager = SessionManager()
-        self.agents = {
-            "jose": WebSocketAgent(AGENT_CONFIGS["jose"]),
-            "hermes": WebSocketAgent(AGENT_CONFIGS["hermes"]),
-        }
+        # Build agents from config-loader results; support websocket and http types
+        self.agents: dict[str, WebSocketAgent | HttpAgent] = {}
+        for name, cfg in AGENT_CONFIGS.items():
+            if cfg.type == "http":
+                self.agents[name] = HttpAgent(cfg)
+            else:
+                self.agents[name] = WebSocketAgent(cfg)
         self.listener_tasks: dict[str, asyncio.Task] = {}
         self.listener_errors: dict[str, str] = {}
-        self.active_agent = "jose"
-        self.sub_title = f"Agent: {self.agents[self.active_agent].label}"
+        # Use first configured agent as default, fall back to "jose"
+        self.active_agent = next(iter(self.agents), "jose")
+        self.sub_title = f"Agent: {self.agents[self.active_agent].label}" if self.agents else "No agents configured"
 
         self._write_banner()
-        if not AGENT_CONFIGS["jose"].token:
-            chat = self.query_one("#chat", RichLog)
-            chat.write(
-                "[yellow]Gateway token not set. Export IXELMAT_GATEWAY_TOKEN before connecting to OpenClaw.[/]"
-            )
+        chat = self.query_one("#chat", RichLog)
+        # Surface config warnings (e.g. missing tokens)
+        for warn in _CONFIG_WARNINGS:
+            chat.write(f"[yellow]{warn}[/]")
+        if not self.agents:
+            chat.write("[red]No agents configured. Check ~/.config/ixel-mat/config.toml[/]")
         # Auto-connect ALL agents so /full works immediately
         for name in self.agents:
             await self._connect_agent(name)
