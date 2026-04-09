@@ -16,7 +16,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from rich.console import Console
+from rich.console import Console, Group
+from rich.live import Live
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.text import Text
@@ -135,12 +136,15 @@ def print_agents(agents: dict[str, BaseAgent]):
     console.print()
 
 
-def _print_answer(text: str):
-    """Render an agent answer — uses Rich Markdown if it contains markdown syntax."""
-    has_markdown = any(marker in text for marker in (
+def _has_markdown(text: str) -> bool:
+    return any(marker in text for marker in (
         "| ", "---|", "## ", "### ", "**", "```", "- [ ]", "1. ",
     ))
-    if has_markdown:
+
+
+def _print_answer(text: str):
+    """Render an agent answer — uses Rich Markdown if it contains markdown syntax."""
+    if _has_markdown(text):
         md = Markdown(text, code_theme="monokai")
         console.print()
         console.print(Panel(md, border_style=C["dim"], padding=(1, 2), width=min(console.width - 4, 100)))
@@ -150,6 +154,100 @@ def _print_answer(text: str):
         for line in text.split("\n"):
             if line.strip():
                 console.print(f"    [{C['moon']}]{line}[/]")
+
+
+def _response_attr(response, key: str, default=None):
+    if response is None:
+        return default
+    if isinstance(response, dict):
+        return response.get(key, default)
+    return getattr(response, key, default)
+
+
+def _format_elapsed(seconds: float) -> str:
+    return f"{max(seconds, 0):.1f}s"
+
+
+def build_full_status_lines(agent_states: dict[str, dict], now: float | None = None) -> list[str]:
+    now = time.perf_counter() if now is None else now
+    total = len(agent_states)
+    responded = sum(1 for state in agent_states.values() if state.get("status") == "done")
+    lines = [f"{responded}/{total} agents responded"]
+
+    for name, state in agent_states.items():
+        label = state.get("label", name)
+        status = state.get("status", "pending")
+        if status == "running":
+            started_at = state.get("started_at", now)
+            lines.append(f"{label} — processing... {_format_elapsed(now - started_at)}")
+            continue
+        response = state.get("response")
+        if response is None:
+            lines.append(f"{label} — waiting")
+            continue
+        answer = _response_attr(response, "answer", "") or "(no answer)"
+        latency_ms = _response_attr(response, "latency_ms", 0)
+        degraded = _response_attr(response, "degraded", False)
+        marker = "degraded" if degraded else f"{latency_ms}ms"
+        lines.append(f"{label} — {marker}")
+        lines.append(answer.split("\n")[0][:120])
+    return lines
+
+
+def _build_full_renderable(prompt: str, agent_states: dict[str, dict]):
+    now = time.perf_counter()
+    total = len(agent_states)
+    responded = sum(1 for state in agent_states.values() if state.get("status") == "done")
+    progress = Text()
+    progress.append(f"{responded}/{total}", style=C["green"])
+    progress.append(" agents responded", style=C["dim"])
+
+    panels = []
+    for name, state in agent_states.items():
+        label = state.get("label", name)
+        status = state.get("status", "pending")
+        if status == "running":
+            started_at = state.get("started_at", now)
+            body = Text()
+            body.append("processing... ", style=C["dim"])
+            body.append(_format_elapsed(now - started_at), style=C["gold"])
+            border_style = C["violet"]
+        elif status == "done":
+            response = state.get("response")
+            answer = _response_attr(response, "answer", "") or "(no answer)"
+            degraded = _response_attr(response, "degraded", False)
+            confidence = _response_attr(response, "confidence", None)
+            evidence = _response_attr(response, "evidence", []) or []
+            followup = _response_attr(response, "followup", "") or ""
+            extra = []
+            if confidence and hasattr(confidence, "value"):
+                extra.append(Text.assemble(("Confidence: ", C["dim"]), (confidence.value, C["blue"])))
+            if evidence:
+                extra.append(Text.assemble(("Evidence: ", C["dim"]), (", ".join(evidence[:5]), C["violet"])))
+            if followup:
+                extra.append(Text.assemble(("Next: ", C["dim"]), (followup, C["moon"])))
+            answer_renderable = Markdown(answer, code_theme="monokai") if _has_markdown(answer) else Text(answer, style=C["moon"])
+            body = Group(answer_renderable, *extra) if extra else answer_renderable
+            border_style = C["gold"] if degraded else C["green"]
+        else:
+            body = Text("queued...", style=C["dim"])
+            border_style = C["dim"]
+
+        panels.append(
+            Panel(
+                body,
+                title=f"[{C['blue']}]{label}[/]",
+                border_style=border_style,
+                padding=(1, 2),
+            )
+        )
+
+    header = Group(
+        Text.assemble(("▸ ", C["gold"]), (prompt, C["moon"])),
+        progress,
+        Text("", style=C["dim"]),
+    )
+    return Group(header, Columns(panels, equal=True, expand=True))
 
 
 @dataclass
@@ -200,28 +298,37 @@ async def run_full(prompt: str, agents: dict[str, BaseAgent]):
         console.print(f"  [{C['red']}]No connected agents.[/]")
         return
 
-    console.print(f"\n  [{C['gold']}]▸[/] [{C['moon']}]{prompt}[/]")
-    console.print(f"  [{C['dim']}]dispatching to {len(connected)} agents...[/]\n")
-
     dispatcher = FullModeDispatcher(connected, timeout=60.0)
+    agent_states = {
+        agent.name: {
+            "label": agent.label,
+            "status": "pending",
+            "started_at": None,
+            "response": None,
+        }
+        for agent in connected
+    }
 
     async def on_start(name: str):
-        console.print(f"  [{C['dim']}]→ {name} processing...[/]")
+        state = agent_states[name]
+        state["status"] = "running"
+        state["started_at"] = time.perf_counter()
 
     async def on_done(resp):
-        status = f"[{C['green']}]✓[/]" if not resp.degraded else f"[{C['gold']}]⚠ degraded[/]"
-        console.print(f"  {status} [{C['blue']}]{resp.agent}[/]  [{C['dim']}]{resp.latency_ms}ms[/]")
-        if resp.answer:
-            _print_answer(resp.answer)
-        if resp.confidence:
-            console.print(f"    [{C['dim']}]Confidence:[/] [{C['blue']}]{resp.confidence.value}[/]")
-        if resp.evidence:
-            console.print(f"    [{C['dim']}]Evidence:[/] [{C['violet']}]{", ".join(resp.evidence[:5])}[/]")
-        if resp.followup:
-            console.print(f"    [{C['dim']}]Next:[/] {resp.followup}")
-        console.print()
+        state = agent_states[resp.agent]
+        state["status"] = "done"
+        state["response"] = resp
 
-    result = await dispatcher.dispatch(prompt, on_agent_start=on_start, on_agent_done=on_done)
+    dispatch_task = asyncio.create_task(
+        dispatcher.dispatch(prompt, on_agent_start=on_start, on_agent_done=on_done)
+    )
+
+    with Live(_build_full_renderable(prompt, agent_states), console=console, refresh_per_second=10) as live:
+        while not dispatch_task.done():
+            live.update(_build_full_renderable(prompt, agent_states))
+            await asyncio.sleep(0.1)
+        result = await dispatch_task
+        live.update(_build_full_renderable(prompt, agent_states))
 
     # Summary
     valid = sum(1 for r in result.responses if not r.degraded)
