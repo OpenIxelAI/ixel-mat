@@ -27,6 +27,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from rich.console import Console
 
+from ixel_commands import build_help_rows, resolve_command_name
+
 
 def classify_probe_status(ok: bool, message: str) -> tuple[str, str]:
     msg = (message or "").lower()
@@ -128,19 +130,7 @@ def print_banner():
 
 def cmd_help():
     print_banner()
-    cmds = [
-        ("ixel",             "Launch the multi-agent terminal"),
-        ("ixel setup",       "Interactive setup — configure agents + API keys"),
-        ("ixel configure",   "Alias for ixel setup"),
-        ("ixel status",      "Single-screen health dashboard for providers, agents, and secrets"),
-        ("ixel models",      "Show providers, models, and auth status"),
-        ("ixel config",      "Show resolved config, tokens, validation status"),
-        ("ixel agents",      "List agents + test connectivity"),
-        ("ixel doctor",      "Check Python deps, config, gateway reachability"),
-        ("ixel version",     "Show version"),
-        ("ixel help",        "Show this help"),
-    ]
-    for cmd, desc in cmds:
+    for cmd, desc in build_help_rows(mode='cli'):
         console.print(f"    [{C['blue']}]{cmd:<20}[/] [{C['dim']}]{desc}[/]")
     console.print()
 
@@ -465,30 +455,36 @@ def cmd_run():
 
 def main():
     args = sys.argv[1:]
-    cmd = args[0] if args else ""
+    raw_cmd = args[0] if args else ''
+    if raw_cmd in ('--help', '-h'):
+        resolved = 'help'
+    elif raw_cmd in ('--version', '-v'):
+        resolved = 'version'
+    else:
+        resolved = resolve_command_name(raw_cmd, mode='cli')
 
     commands = {
-        "":           cmd_run,
-        "setup":      cmd_setup,
-        "configure":  cmd_setup,      # alias for setup
-        "status":     cmd_status,
-        "models":     cmd_models,
-        "config":     cmd_config,
-        "agents":     cmd_agents,
-        "doctor":     cmd_doctor,
-        "version":    cmd_version,
-        "help":       cmd_help,
-        "--help":     cmd_help,
-        "-h":         cmd_help,
-        "--version":  cmd_version,
-        "-v":         cmd_version,
+        'run': cmd_run,
+        'setup': cmd_setup,
+        'status': cmd_status,
+        'models': cmd_models,
+        'config': cmd_config,
+        'agents': cmd_agents,
+        'doctor': cmd_doctor,
+        'version': cmd_version,
+        'help': cmd_help,
     }
 
-    handler = commands.get(cmd)
+    if isinstance(resolved, tuple) and resolved[0] == 'ambiguous':
+        console.print(f"  [{C['red']}]Ambiguous command: {raw_cmd}[/]")
+        console.print(f"  [{C['dim']}]Matches: {', '.join(resolved[1])}[/]\n")
+        sys.exit(1)
+
+    handler = commands.get(resolved)
     if handler:
         handler()
     else:
-        console.print(f"  [{C['red']}]Unknown command: {cmd}[/]")
+        console.print(f"  [{C['red']}]Unknown command: {raw_cmd}[/]")
         console.print(f"  [{C['dim']}]Run 'ixel help' for available commands[/]\n")
         sys.exit(1)
 

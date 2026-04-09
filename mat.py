@@ -30,6 +30,7 @@ from rich import box
 from agents.base import AgentConfig, BaseAgent
 from config.secrets import load_env, secrets_exist
 from config.loader import load_config, build_agent_configs, validate_config, print_config_status
+from ixel_commands import build_help_rows, resolve_command_name
 
 # Load secrets from ~/.config/ixel-mat/.env FIRST (before config reads token_env)
 _loaded_secrets = load_env()
@@ -115,16 +116,8 @@ async def disconnect_all(agents: dict[str, BaseAgent]):
 
 def print_help():
     console.print(f"\n  [{C['gold']}]Ixel MAT[/] [{C['dim']}]— Commands[/]\n")
-    cmds = [
-        ("/full <prompt>",      "Send prompt to all agents — compare side by side"),
-        ("/consensus [flags] <prompt>", "Stream responses, then synthesize once enough valid answers arrive"),
-        ("/agents",             "Show connected agent status"),
-        ("/config",             "Show resolved config + validation"),
-        ("/help",               "Show this help"),
-        ("/quit",               "Exit"),
-    ]
-    for cmd, desc in cmds:
-        console.print(f"    [{C['blue']}]{cmd:<20}[/] [{C['dim']}]{desc}[/]")
+    for cmd, desc in build_help_rows(mode='mat'):
+        console.print(f"    [{C['blue']}]{cmd:<28}[/] [{C['dim']}]{desc}[/]")
     console.print()
 
 
@@ -565,24 +558,38 @@ async def main():
                     console.print(f"  [{C['gold']}]⚠[/] [{C['dim']}]Paste cancelled.[/]\n")
                     continue
 
-            if text in ("/quit", "/exit", "/q"):
-                break
-            elif text == "/help":
-                print_help()
-            elif text in ("/agents", "/status"):
-                print_agents(agents)
-            elif text.startswith("/full "):
-                prompt = text[6:].strip()
-                if prompt:
-                    await run_full(prompt, agents)
+            if text.startswith('/'):
+                body = text[1:]
+                raw_name, _, remainder = body.partition(' ')
+                resolved = resolve_command_name(raw_name, mode='mat')
+                if isinstance(resolved, tuple) and resolved[0] == 'ambiguous':
+                    console.print(f"  [{C['gold']}]⚠[/] [{C['dim']}]Ambiguous command: /{raw_name}[/]")
+                    console.print(f"  [{C['dim']}]Matches: {', '.join('/' + m for m in resolved[1])}[/]\n")
+                    continue
+                if resolved is None:
+                    console.print(f"  [{C['dim']}]Unknown command. Try /help[/]")
+                    continue
+                args = remainder.strip()
+                if resolved == 'quit':
+                    break
+                elif resolved == 'help':
+                    print_help()
+                elif resolved == 'agents':
+                    print_agents(agents)
+                elif resolved == 'full':
+                    if args:
+                        await run_full(args, agents)
+                    else:
+                        console.print(f"  [{C['dim']}]Usage: /full <prompt>[/]")
+                elif resolved == 'config':
+                    print_config_status(_CONFIG)
+                elif resolved == 'consensus':
+                    if args:
+                        await run_consensus_cmd(args, agents)
+                    else:
+                        console.print(f"  [{C['dim']}]Usage: /consensus [--timeout SECONDS] [--min-responses N] <prompt>[/]")
                 else:
-                    console.print(f"  [{C['dim']}]Usage: /full <prompt>[/]")
-            elif text == "/config":
-                print_config_status(_CONFIG)
-            elif text.startswith("/consensus "):
-                await run_consensus_cmd(text[11:].strip(), agents)
-            elif text.startswith("/"):
-                console.print(f"  [{C['dim']}]Unknown command. Try /help[/]")
+                    console.print(f"  [{C['dim']}]Unknown command. Try /help[/]")
             else:
                 # Default: send as /full
                 await run_full(text, agents)
