@@ -43,6 +43,12 @@ python mat.py setup
 python mat.py
 ```
 
+Run the automated test suite with:
+
+```bash
+pytest tests/
+```
+
 ---
 
 ## Agent Configuration
