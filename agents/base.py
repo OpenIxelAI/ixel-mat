@@ -64,7 +64,7 @@ class BaseAgent(ABC):
         ...
 
     @abstractmethod
-    async def send_and_receive(self, message: str) -> str:
+    async def send_and_receive(self, message: str, **kwargs) -> str:
         """Send a message and wait for the full response. Used by /full mode."""
         ...
 

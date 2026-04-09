@@ -57,7 +57,7 @@ class HttpAgent(BaseAgent):
     async def send(self, message: str) -> None:
         await self.send_and_receive(message)
 
-    async def send_and_receive(self, message: str, use_full_session: bool = True) -> str:
+    async def send_and_receive(self, message: str, use_full_session: bool = True, **kwargs) -> str:
         """Send message to API and return response text."""
         if not self._connected or not self._session:
             raise RuntimeError(f"Agent '{self.name}' not connected")

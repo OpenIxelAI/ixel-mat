@@ -148,10 +148,11 @@ class SubprocessAgent(BaseAgent):
         self.process.stdin.write(payload)
         await self.process.stdin.drain()
 
-    async def send_and_receive(self, message: str) -> str:
+    async def send_and_receive(self, message: str, **kwargs) -> str:
         """
         Sends prompt then collects output until the stream goes idle.
         This keeps behavior transport-agnostic for /full without hard-coding prompts.
+        kwargs accepted and ignored for transport-agnostic compatibility.
         """
         async with self._lock:
             self._drain_queue()

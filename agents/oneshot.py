@@ -44,8 +44,10 @@ class OneShotAgent(BaseAgent):
         if self._listen_callback and response:
             await self._listen_callback(response)
 
-    async def send_and_receive(self, message: str) -> str:
-        """Send and return full response. Used by /full mode."""
+    async def send_and_receive(self, message: str, **kwargs) -> str:
+        """Send and return full response. Used by /full mode.
+        kwargs accepted and ignored for transport-agnostic compatibility.
+        """
         return await self._run_command(message)
 
     async def listen(self, callback: Callable[[str], Awaitable[None]]) -> None:

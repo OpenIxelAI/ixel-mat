@@ -211,7 +211,7 @@ class WebSocketAgent(BaseAgent):
 
     # ── send_and_receive (with full isolation) ────────────────────────────────
 
-    async def send_and_receive(self, message: str, use_full_session: bool = True) -> str:
+    async def send_and_receive(self, message: str, use_full_session: bool = True, **kwargs) -> str:
         """
         Send message and return reply text.
         
