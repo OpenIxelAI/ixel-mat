@@ -24,7 +24,7 @@ from rich.columns import Columns
 from rich.text import Text
 from rich.table import Table
 from rich.markdown import Markdown
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from rich import box
 
 from agents.base import AgentConfig, BaseAgent
@@ -170,6 +170,18 @@ def _format_elapsed(seconds: float) -> str:
     return f"{max(seconds, 0):.1f}s"
 
 
+def describe_large_paste(text: str) -> str:
+    stripped = text.strip()
+    return f"{len(stripped)} chars / {len(stripped.splitlines()) or 1} lines"
+
+
+def should_confirm_large_paste(text: str, char_threshold: int = 2000, line_threshold: int = 12) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    return len(stripped) >= char_threshold or len(stripped.splitlines()) >= line_threshold
+
+
 def format_prompt_preview(text: str, paste_state: dict[str, int] | None = None) -> str:
     stripped = text.strip()
     lines = stripped.splitlines()
@@ -185,6 +197,10 @@ def format_prompt_preview(text: str, paste_state: dict[str, int] | None = None) 
 
 async def _prompt_async(label: str) -> str:
     return await asyncio.to_thread(Prompt.ask, label)
+
+
+async def _confirm_async(label: str, default: bool = True) -> bool:
+    return await asyncio.to_thread(Confirm.ask, label, default=default)
 
 
 async def read_burst_submission(
@@ -523,6 +539,16 @@ async def main():
             text = user_input.strip()
             if not text:
                 continue
+
+            if should_confirm_large_paste(text):
+                stats = describe_large_paste(text)
+                ok = await _confirm_async(
+                    f"  [{C['gold']}]Large paste detected:[/] [{C['dim']}]{stats}[/]  [{C['moon']}]Send as one prompt?[/]",
+                    default=True,
+                )
+                if not ok:
+                    console.print(f"  [{C['gold']}]⚠[/] [{C['dim']}]Paste cancelled.[/]\n")
+                    continue
 
             if text in ("/quit", "/exit", "/q"):
                 break
