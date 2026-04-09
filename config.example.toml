@@ -1,0 +1,55 @@
+# Ixel MAT — Agent Configuration
+# Copy to ~/.config/ixel-mat/config.toml and customize
+# Secrets: use env vars, never paste tokens here
+
+# ── WebSocket agents (via OpenClaw gateway) ───────────────────────
+[agents.jose]
+type = "websocket"
+url = "ws://127.0.0.1:18789"
+token_env = "CLAWTTY_GATEWAY_TOKEN"
+session_key = "agent:main:main"
+label = "Jose (OpenClaw)"
+color = "cyan"
+
+[agents.hermes]
+type = "websocket"
+url = "ws://127.0.0.1:18789"
+token_env = "CLAWTTY_GATEWAY_TOKEN"
+session_key = "agent:hermes:main"
+label = "Hermes (OpenClaw)"
+color = "yellow"
+
+# ── HTTP agents (direct API — no gateway needed) ─────────────────
+# Uncomment any of these and set the env var to add the agent.
+
+# [agents.gpt]
+# type = "http"
+# url = "https://api.openai.com/v1/chat/completions"
+# token_env = "OPENAI_API_KEY"
+# model = "gpt-4o"
+# label = "GPT-4o"
+# color = "green"
+
+# [agents.grok]
+# type = "http"
+# url = "https://api.x.ai/v1/chat/completions"
+# token_env = "XAI_API_KEY"
+# model = "grok-4"
+# label = "Grok 4"
+# color = "magenta"
+
+# [agents.claude]
+# type = "http"
+# url = "https://api.anthropic.com/v1/messages"
+# token_env = "ANTHROPIC_API_KEY"
+# model = "claude-sonnet-4-5"
+# label = "Claude Sonnet"
+# color = "blue"
+
+# [agents.gemini]
+# type = "http"
+# url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+# token_env = "GOOGLE_API_KEY"
+# model = "gemini-2.5-pro"
+# label = "Gemini Pro"
+# color = "red"

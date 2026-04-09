@@ -1,0 +1,12 @@
+# Secrets — never commit
+config.toml
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor
+.vscode/
+.idea/
