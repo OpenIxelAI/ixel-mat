@@ -93,20 +93,59 @@ def _probe_provider(provider: dict, key: str) -> tuple[str, str, int | None]:
     return status_key, status_label, latency_ms
 
 
-async def _probe_agent_connection(cfg) -> tuple[str, str]:
+def remediation_hint(status_key: str, message: str, provider_id: str | None = None) -> str:
+    provider_label = provider_id or "provider"
+    if status_key == "auth_failed":
+        return f"Run ixel setup and replace the {provider_label} key."
+    if status_key == "rate_limited":
+        return f"{provider_label} is rate limited — retry shortly or switch models."
+    return f"Check network reachability and verify {provider_label} endpoint/settings."
+
+
+def summarize_agent_probe(cfg, status_key: str, detail: str, latency_ms: int | None = None) -> tuple[str, str]:
+    if cfg.type == "http":
+        if status_key == "ok":
+            return f"[{C['green']}]✓ auth ok[/]", f"ready — {latency_ms}ms auth probe"
+        if status_key == "rate_limited":
+            return f"[{C['gold']}]⚠ rate limited[/]", detail
+        if status_key == "auth_failed":
+            return f"[{C['red']}]✗ auth failed[/]", detail
+        return f"[{C['red']}]✗ unreachable[/]", detail
+    if status_key == "ok":
+        return f"[{C['green']}]✓ connected[/]", "transport ready"
+    return f"[{C['red']}]✗ failed[/]", detail
+
+
+def _provider_for_agent_cfg(cfg):
+    from config.setup import PROVIDERS
+
+    for provider in PROVIDERS:
+        if cfg.url and provider.get("url") == cfg.url:
+            return provider
+    return None
+
+
+async def _probe_agent_connection(cfg) -> tuple[str, str, int | None, str | None]:
     from agents import create_agent
+
+    if cfg.type == "http":
+        provider = _provider_for_agent_cfg(cfg)
+        if provider is None:
+            return "unreachable", "unknown provider configuration", None, None
+        status_key, status_label, latency_ms = _probe_provider(provider, cfg.token)
+        return status_key, status_label, latency_ms, provider.get("id")
 
     try:
         agent = create_agent(cfg)
     except Exception as exc:
-        return "error", str(exc)
+        return "unreachable", str(exc), None, None
 
     try:
         await agent.connect()
         await agent.disconnect()
-        return "ok", "connected"
+        return "ok", "connected", None, None
     except Exception as exc:
-        return "error", str(exc)
+        return "unreachable", str(exc), None, None
 
 # IxelOS palette
 C = {
@@ -294,9 +333,11 @@ def cmd_status():
     async def collect_agent_rows():
         rows = []
         for name, cfg in configs.items():
-            status, detail = await _probe_agent_connection(cfg)
-            status_str = f"[{C['green']}]✓ connected[/]" if status == "ok" else f"[{C['red']}]✗ failed[/]"
-            rows.append((name, cfg.label, cfg.type, status_str, detail[:120]))
+            status_key, detail, latency_ms, provider_id = await _probe_agent_connection(cfg)
+            status_str, detail_str = summarize_agent_probe(cfg, status_key, detail, latency_ms)
+            if status_key != 'ok':
+                detail_str = f"{detail_str} — {remediation_hint(status_key, detail, provider_id)}"
+            rows.append((name, cfg.label, cfg.type, status_str, detail_str[:120]))
         return rows
 
     rows = asyncio.run(collect_agent_rows()) if configs else []
@@ -365,18 +406,11 @@ def cmd_agents():
             console.print(f"    [{C['blue']}]{name}[/] [{C['dim']}]— {cfg.label}[/]")
             console.print(f"      [{C['dim']}]type: {agent_type}  url: {url}  token: {'✓' if token_set else '✗'}[/]")
 
-            if not token_set:
-                console.print(f"      [{C['red']}]✗ no token — run ixel setup[/]")
-                continue
-
-            # Try connecting
-            try:
-                agent = create_agent(cfg)
-                await agent.connect()
-                console.print(f"      [{C['green']}]✓ connected[/]")
-                await agent.disconnect()
-            except Exception as e:
-                console.print(f"      [{C['red']}]✗ {e}[/]")
+            status_key, detail, latency_ms, provider_id = await _probe_agent_connection(cfg)
+            status_str, detail_str = summarize_agent_probe(cfg, status_key, detail, latency_ms)
+            console.print(f"      {status_str} [{C['dim']}]{detail_str}[/]")
+            if status_key != 'ok':
+                console.print(f"      [{C['gold']}]⚠[/] [{C['dim']}]{remediation_hint(status_key, detail, provider_id)}[/]")
 
             console.print()
 
