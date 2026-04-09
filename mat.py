@@ -29,8 +29,7 @@ from config.loader import load_config, build_agent_configs, validate_config, pri
 
 # Load secrets from ~/.config/ixel-mat/.env FIRST (before config reads token_env)
 _loaded_secrets = load_env()
-from agents.websocket import WebSocketAgent
-from agents.http import HttpAgent
+from agents import create_agent
 from modes.full import FullModeDispatcher
 from modes.consensus import run_consensus
 from schema.response import FULL_MODE_SUFFIX, parse_structured_response
@@ -85,10 +84,11 @@ async def connect_agents() -> dict[str, BaseAgent]:
     """Connect all configured agents. Returns dict of connected agents."""
     agents: dict[str, BaseAgent] = {}
     for name, config in _AGENT_CONFIGS.items():
-        if config.type == "http":
-            agent = HttpAgent(config)
-        else:
-            agent = WebSocketAgent(config)
+        try:
+            agent = create_agent(config)
+        except ValueError as e:
+            console.print(f"  [{C['red']}]✗[/] [{C['blue']}]{config.label}[/]  [{C['red']}]{e}[/]")
+            continue
         try:
             await agent.connect()
             console.print(f"  [{C['green']}]✓[/] [{C['blue']}]{config.label}[/]  [{C['dim']}]connected[/]")

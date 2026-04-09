@@ -155,8 +155,7 @@ def cmd_agents():
     from config.secrets import load_env
     load_env()
     from config.loader import load_config, build_agent_configs
-    from agents.websocket import WebSocketAgent
-    from agents.http import HttpAgent
+    from agents import create_agent
 
     config = load_config()
     configs, warnings = build_agent_configs(config)
@@ -184,11 +183,7 @@ def cmd_agents():
 
             # Try connecting
             try:
-                if agent_type == "http":
-                    agent = HttpAgent(cfg)
-                else:
-                    agent = WebSocketAgent(cfg)
-
+                agent = create_agent(cfg)
                 await agent.connect()
                 console.print(f"      [{C['green']}]✓ connected[/]")
                 await agent.disconnect()
