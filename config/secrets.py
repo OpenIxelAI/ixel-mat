@@ -23,6 +23,14 @@ _ENV_DIR  = Path.home() / ".config" / "ixel-mat"
 _ENV_FILE = _ENV_DIR / ".env"
 
 
+def normalize_secret_input(value: str) -> str:
+    """Normalize pasted secrets by removing line breaks and non-Latin1 artifacts."""
+    if not value:
+        return ""
+    cleaned = value.replace("\r", "").replace("\n", "").strip().strip('"').strip("'")
+    return "".join(ch for ch in cleaned if ord(ch) <= 255)
+
+
 def load_env() -> dict[str, str]:
     """
     Load secrets from .env file into os.environ.
@@ -43,7 +51,7 @@ def load_env() -> dict[str, str]:
                 continue
             key, _, value = line.partition("=")
             key = key.strip()
-            value = value.strip().strip('"').strip("'")
+            value = normalize_secret_input(value)
             if key and value:
                 # Don't override already-set vars
                 if key not in os.environ:
@@ -70,9 +78,9 @@ def save_secret(key: str, value: str) -> None:
                 continue
             if "=" in stripped:
                 k, _, v = stripped.partition("=")
-                existing[k.strip()] = v.strip().strip('"').strip("'")
+                existing[k.strip()] = normalize_secret_input(v)
 
-    existing[key] = value
+    existing[key] = normalize_secret_input(value)
 
     # Write back
     lines = [

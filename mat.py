@@ -182,6 +182,19 @@ def should_confirm_large_paste(text: str, char_threshold: int = 2000, line_thres
     return len(stripped) >= char_threshold or len(stripped.splitlines()) >= line_threshold
 
 
+def normalize_interactive_command(text: str) -> str:
+    stripped = text.strip()
+    lowered = stripped.lower()
+    mapping = {
+        "ixel help": "/help",
+        "ixel agents": "/agents",
+        "ixel status": "/agents",
+        "ixel config": "/config",
+        "ixel version": "/help",
+    }
+    return mapping.get(lowered, stripped)
+
+
 def format_prompt_preview(text: str, paste_state: dict[str, int] | None = None) -> str:
     stripped = text.strip()
     lines = stripped.splitlines()
@@ -536,9 +549,11 @@ async def main():
             except (EOFError, KeyboardInterrupt):
                 break
 
-            text = user_input.strip()
+            text = normalize_interactive_command(user_input)
             if not text:
                 continue
+            if text != user_input.strip():
+                console.print(f"  [{C['gold']}]⚠[/] [{C['dim']}]Interpreting as {text} inside MAT.[/]\n")
 
             if should_confirm_large_paste(text):
                 stats = describe_large_paste(text)

@@ -20,7 +20,7 @@ from rich.prompt import Prompt, Confirm
 from rich.table import Table
 from rich import box
 
-from config.secrets import save_secret, get_env_file_path, load_env
+from config.secrets import save_secret, get_env_file_path, load_env, normalize_secret_input
 
 console = Console()
 
@@ -296,7 +296,7 @@ def _setup_provider(provider: dict, existing_status: dict) -> Optional[str]:
         if not new_key.strip():
             console.print(f"  [{C['dim']}]No key entered — keeping existing.[/]\n")
             return s["key"]
-        key = new_key.strip()
+        key = normalize_secret_input(new_key)
     else:
         if pid == "openclaw":
             console.print(
@@ -313,7 +313,7 @@ def _setup_provider(provider: dict, existing_status: dict) -> Optional[str]:
         if not key.strip():
             console.print(f"  [{C['dim']}]No key entered — skipped.[/]\n")
             return None
-        key = key.strip()
+        key = normalize_secret_input(key)
 
     # Validate key live
     console.print(f"  [{C['dim']}]Validating...[/]", end="")
