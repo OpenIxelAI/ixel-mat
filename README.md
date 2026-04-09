@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/ixel-logo.png" alt="Ixel" width="280">
+</p>
+
 # Ixel MAT
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
