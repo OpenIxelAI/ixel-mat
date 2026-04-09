@@ -12,9 +12,12 @@ Flow:
 """
 from __future__ import annotations
 
+import logging
 import os
 import stat
 from pathlib import Path
+
+logger = logging.getLogger("ixel_mat.config.secrets")
 
 _ENV_DIR  = Path.home() / ".config" / "ixel-mat"
 _ENV_FILE = _ENV_DIR / ".env"
@@ -46,8 +49,8 @@ def load_env() -> dict[str, str]:
                 if key not in os.environ:
                     os.environ[key] = value
                 loaded[key] = value
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to read secrets from %s: %s", _ENV_FILE, exc)
 
     return loaded
 
