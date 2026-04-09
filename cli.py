@@ -47,16 +47,18 @@ def print_banner():
 def cmd_help():
     print_banner()
     cmds = [
-        ("ixel",          "Launch the multi-agent terminal"),
-        ("ixel setup",    "Interactive setup — configure agents + API keys"),
-        ("ixel config",   "Show resolved config, tokens, validation status"),
-        ("ixel agents",   "List agents + test connectivity"),
-        ("ixel doctor",   "Check Python deps, config, gateway reachability"),
-        ("ixel version",  "Show version"),
-        ("ixel help",     "Show this help"),
+        ("ixel",             "Launch the multi-agent terminal"),
+        ("ixel setup",       "Interactive setup — configure agents + API keys"),
+        ("ixel configure",   "Alias for ixel setup"),
+        ("ixel models",      "Show providers, models, and auth status"),
+        ("ixel config",      "Show resolved config, tokens, validation status"),
+        ("ixel agents",      "List agents + test connectivity"),
+        ("ixel doctor",      "Check Python deps, config, gateway reachability"),
+        ("ixel version",     "Show version"),
+        ("ixel help",        "Show this help"),
     ]
     for cmd, desc in cmds:
-        console.print(f"    [{C['blue']}]{cmd:<18}[/] [{C['dim']}]{desc}[/]")
+        console.print(f"    [{C['blue']}]{cmd:<20}[/] [{C['dim']}]{desc}[/]")
     console.print()
 
 
@@ -76,6 +78,76 @@ def cmd_config():
 def cmd_setup():
     from config.setup import run_setup
     run_setup()
+
+
+def cmd_models():
+    """Show all providers, their available models, auth status, and which model each agent uses."""
+    from config.secrets import load_env
+    load_env()
+    from config.loader import load_config, build_agent_configs
+    from config.setup import PROVIDERS, _mask_key
+
+    config = load_config()
+    agent_configs, _ = build_agent_configs(config)
+
+    print_banner()
+    console.print(f"  [{C['moon']}]Providers & Models[/]\n")
+
+    from rich.table import Table
+    from rich import box as rbox
+
+    # ── Provider table ────────────────────────────────────────────────────
+    ptable = Table(
+        box=rbox.SIMPLE,
+        show_header=True,
+        header_style=f"bold {C['moon']}",
+        border_style=C["dim"],
+        padding=(0, 1),
+    )
+    ptable.add_column("Provider",   style=C["blue"],  min_width=22)
+    ptable.add_column("Auth",                         min_width=18)
+    ptable.add_column("Key",        style=C["dim"],   min_width=14)
+    ptable.add_column("Models",     style=C["dim"],   min_width=40)
+
+    for p in PROVIDERS:
+        env_name = p["env_name"]
+        key      = os.getenv(env_name, "")
+        if key:
+            auth_str = f"[{C['green']}]✓ set[/]"
+            key_str  = _mask_key(key)
+        else:
+            auth_str = f"[{C['red']}]✗ not set[/]"
+            key_str  = "—"
+        models_str = ", ".join(p.get("models", []))
+        ptable.add_row(p["name"], auth_str, key_str, models_str)
+
+    console.print(ptable)
+
+    # ── Agent model usage table ───────────────────────────────────────────
+    if agent_configs:
+        console.print(f"  [{C['moon']}]Agent Model Usage[/]\n")
+
+        atable = Table(
+            box=rbox.SIMPLE,
+            show_header=True,
+            header_style=f"bold {C['moon']}",
+            border_style=C["dim"],
+            padding=(0, 1),
+        )
+        atable.add_column("Agent",   style=C["blue"],  min_width=14)
+        atable.add_column("Label",   style=C["moon"],  min_width=24)
+        atable.add_column("Type",    style=C["dim"],   min_width=10)
+        atable.add_column("Model / Session", style=C["dim"], min_width=30)
+        atable.add_column("Token",                     min_width=10)
+
+        for name, cfg in agent_configs.items():
+            extra      = cfg.model or cfg.session_key or "—"
+            token_str  = f"[{C['green']}]✓[/]" if cfg.token else f"[{C['red']}]✗[/]"
+            atable.add_row(name, cfg.label, cfg.type, extra, token_str)
+
+        console.print(atable)
+    else:
+        console.print(f"  [{C['gold']}]⚠[/] [{C['dim']}]No agents configured — run: ixel setup[/]\n")
 
 
 def cmd_agents():
@@ -206,17 +278,19 @@ def main():
     cmd = args[0] if args else ""
 
     commands = {
-        "":        cmd_run,
-        "setup":   cmd_setup,
-        "config":  cmd_config,
-        "agents":  cmd_agents,
-        "doctor":  cmd_doctor,
-        "version": cmd_version,
-        "help":    cmd_help,
-        "--help":  cmd_help,
-        "-h":      cmd_help,
-        "--version": cmd_version,
-        "-v":      cmd_version,
+        "":           cmd_run,
+        "setup":      cmd_setup,
+        "configure":  cmd_setup,      # alias for setup
+        "models":     cmd_models,
+        "config":     cmd_config,
+        "agents":     cmd_agents,
+        "doctor":     cmd_doctor,
+        "version":    cmd_version,
+        "help":       cmd_help,
+        "--help":     cmd_help,
+        "-h":         cmd_help,
+        "--version":  cmd_version,
+        "-v":         cmd_version,
     }
 
     handler = commands.get(cmd)
