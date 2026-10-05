@@ -13,7 +13,8 @@
 </p>
 
 Ixel MAT puts the models you already use on one panel: Claude, GPT, Gemini, Grok, local models through Ollama
-or LM Studio, and your Claude Code, Codex, Gemini CLI, GitHub Copilot and OpenCode sign-ins. Each model answers
+or LM Studio, and your Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode and Grok Build (SuperGrok)
+sign-ins. Each model answers
 on its own, grades the others' answers without knowing whose they are, and a moderator writes the verdict, with
 the mistakes the panel caught.
 
