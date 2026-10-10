@@ -133,17 +133,20 @@ def _grok(home, tmp_path, url, monkeypatch, fields):
     _write(home / ".claude" / "settings.json", json.dumps({"hooks": {"UserPromptSubmit": [hook], "SessionStart": [hook]}}))
     _write(home / ".claude" / "CLAUDE.md", f"{HOME_NOTE}\n")
     _write(home / ".grok" / "AGENTS.md", f"{HOME_NOTE}\n")
+    # Skills in ~/.agents, which Grok Build reads as well as its own
+    _write(home / ".agents" / "skills" / "trap" / "SKILL.md", f"---\nname: trap\ndescription: {HOME_NOTE}\n---\n")
+    _write(home / ".agents" / "commands" / "trap.md", f"{HOME_NOTE}\n")
     # The fake model stands in for xAI's: Grok Build only reaches another server through a model defined in its
-    # config, and the home Ixel gives it has none of yours, so the one for the fake model is put there (the only
-    # thing in it beside what Ixel puts there). Keys in your environment must be dropped.
+    # config, and the home Ixel gives it has none of yours, so the one for the fake model is added to the config
+    # Ixel writes there (the only thing in it beside what Ixel puts there). Keys in your environment must be dropped.
     from ixel_mat.agents import leftovers
     real_run = leftovers._grok_run
 
     def with_fake_model(folder, env):
         run = real_run(folder, env)
-        _write(Path(run.home) / "config.toml",
-               f'[model.{GROK_DEFAULT}]\nmodel = "{GROK_DEFAULT}"\nbase_url = "{url}/v1"\nenv_key = "IXEL_FAKE_KEY"\n'
-               'api_backend = "chat_completions"\nname = "Fake"\n')
+        with open(Path(run.home) / "config.toml", "a", encoding="utf-8") as config:
+            config.write(f'\n[model.{GROK_DEFAULT}]\nmodel = "{GROK_DEFAULT}"\nbase_url = "{url}/v1"\n'
+                         'env_key = "IXEL_FAKE_KEY"\napi_backend = "chat_completions"\nname = "Fake"\n')
         return run
     monkeypatch.setattr(leftovers, "_grok_run", with_fake_model)
     fields["env"] = {**fields.get("env", {}), "IXEL_FAKE_KEY": "sk-fake-test"}

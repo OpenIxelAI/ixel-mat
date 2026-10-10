@@ -94,8 +94,8 @@ loaded (unless `pass_env` names them) and anything in `drop_env`, adds `env`, an
 POSIX, a job object on Windows). Then, for a run in Ixel's temp folder, `agents/leftovers.py` removes what Gemini
 CLI, Copilot and OpenCode saved of it in their own folders (`leftovers.prepare` gives Copilot its own
 `--session-id` and `--log-dir` first; `Run.clean` runs in a thread once the CLI has exited). Grok Build, in any
-folder, gets a `GROK_HOME` of its own holding a copy of your login (`Run.env_add`), which goes afterwards, a
-refreshed login copied back first; its question goes in a private file (`prompt_via = "file"`), with each `@`
+folder, gets a `GROK_HOME` of its own (`Run.env_add`), which goes afterwards, and uses your login where it is
+(`GROK_AUTH_PATH`); its question goes in a private file (`prompt_via = "file"`), with each `@`
 that would make it read a file defused (`presets.safe_question`, undone in the answer by `own_answer`). See
 [SECURITY.md](SECURITY.md).
 

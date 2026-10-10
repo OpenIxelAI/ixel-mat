@@ -141,14 +141,14 @@ files. Ixel uses them only to answer, and for each preset:
   a script of yours), OpenCode you run yourself (it still fetches unless you set that variable too), and
   OpenCode 1's attempt to install its plugin package from npm the first time it runs with a new config folder.
 - **Grok Build gets a home folder of its own** for every run (`GROK_HOME`, made so only you can open it),
-  holding a copy of your login (`~/.grok/auth.json`) and of the id Grok Build gave your computer
-  (`~/.grok/agent_id`), and nothing else of yours. Your default model is carried over (`GROK_CONFIG`, unless
-  it's a model you defined yourself, which isn't defined there). The folder is deleted after the run, with the
-  session Grok Build kept in it. Grok Build refreshes its login by itself: when it did during the run, the new
-  login is copied back to `~/.grok/auth.json`, under Grok Build's own lock on it, but only if yours is still
-  the one Ixel copied (otherwise yours is the newer one, and stays). An API key in your environment
-  (`XAI_API_KEY`, `GROK_CODE_XAI_API_KEY`) is dropped, so your SuperGrok or X Premium login is what's used.
-  Checked against Grok Build 1.0.46.
+  holding a copy of the id Grok Build gave your computer (`~/.grok/agent_id`), a link to Grok Build's own
+  program (`~/.grok/bin/grok`, so its npm launcher doesn't unpack a new copy for each question), and a config
+  of Ixel's: your default model (unless it's a model you defined yourself, which isn't defined there), and
+  your skills in `~/.agents` switched off (Grok Build reads them as well as its own). Nothing else of yours is
+  in it. Your login stays where it is, and Grok Build is told where (`GROK_AUTH_PATH`), so it refreshes it
+  there under its own lock, as it does for any Grok Build of yours. The folder is deleted after the run, with
+  the session Grok Build kept in it. An API key in your environment (`XAI_API_KEY`, `GROK_CODE_XAI_API_KEY`)
+  is dropped, so your SuperGrok or X Premium login is what's used. Checked against Grok Build 1.0.46.
 - **No file read for an `@` (Grok Build).** Grok Build reads a file into the question for every `@` that
   starts a word and names one (`@/etc/passwd`, `@../notes`, or `@notes.txt` in the folder it runs in), even
   with spaces or blank lines between the `@` and the name, with its read tool denied and `--verbatim` alike,
@@ -238,8 +238,8 @@ files. Ixel uses them only to answer, and for each preset:
 fake model answers with tool calls: run a shell command, write a file, read Ixel's key file. Some tests
 also plant a user MCP server that would leave a file behind if started, a user config that turns every
 tool back on, API keys in the environment, and notes for agents (`AGENTS.md`) in the folder Ixel runs from
-(for Grok Build also hooks, Claude Code's MCP servers, hooks and `CLAUDE.md`, and an `@` before a file's path
-and before a file in the folder it runs in).
+(for Grok Build also hooks, skills in `~/.agents`, Claude Code's MCP servers, hooks and `CLAUDE.md`, and an `@`
+before a file's path and before a file in the folder it runs in).
 The test fails if anything runs, if the key file's contents or those notes reach the model, if a planted API
 key is used, or if any tool is offered beyond a short list of harmless
 ones (for Gemini CLI, the list plan mode keeps, web search and web fetch included). For OpenCode it also

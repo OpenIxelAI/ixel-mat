@@ -128,9 +128,8 @@ preset = "copilot"
 preset = "opencode"
 
 # Grok Build (`grok`), signed in with your SuperGrok or X Premium account
-# (`grok login`). Each question runs in a home folder of its own holding only a
-# copy of your login, so your Grok Build config, MCP servers, hooks and
-# sessions stay out of it.
+# (`grok login`). Each question runs in a home folder of its own, so your Grok
+# Build config, MCP servers, hooks, skills and sessions stay out of it.
 [agents.grok_build]
 preset = "grok_build"
 

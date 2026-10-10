@@ -13,10 +13,10 @@ never a login, a setting, or a session of yours.
   in ~/.copilot/session-state, its lock, and its rows in ~/.copilot/session-store.db.
 - OpenCode: the sessions whose folder is the run's folder, in each of its databases
   (~/.local/share/opencode/opencode*.db), with everything kept for them.
-- Grok Build: each run gets a home folder of its own (GROK_HOME), with only a copy of your login in it, so
-  none of your config, MCP servers, hooks, plugins, memory or sessions reaches it. Afterwards the folder goes,
-  with the session it kept; a login Grok Build refreshed meanwhile is copied back first, if yours is still as it
-  was. This happens in any folder, an agent's own workdir too.
+- Grok Build: each run gets a home folder of its own (GROK_HOME), with only a copy of your computer's id in it,
+  so none of your config, MCP servers, hooks, plugins, skills, memory or sessions reaches it. It uses your login
+  where it is (GROK_AUTH_PATH). Afterwards the folder goes, with the session it kept. This happens in any
+  folder, an agent's own workdir too.
 
 Rows are deleted with SQLite's secure_delete on, and the database's write-ahead log is emptied afterwards, so
 the text doesn't stay behind in free space. A run in a folder of yours (an agent's own workdir) is left alone:
@@ -33,13 +33,12 @@ import sqlite3
 import tempfile
 import time
 import uuid
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
-from typing import Callable, Iterator, Mapping
+from typing import Callable, Mapping
 from urllib.parse import quote
 
-from ixel_mat.presets import grok_home, preset_for
+from ixel_mat.presets import grok_home, grok_login, preset_for
 
 logger = logging.getLogger("ixel_mat.agents.leftovers")
 
@@ -94,7 +93,6 @@ class Run:
     log_dir: str = ""            # Copilot's log folder for this run
     env_add: dict[str, str] = field(default_factory=dict)  # variables added for this run
     home: str = ""               # Grok Build's home folder for this run
-    login: bytes | None = None   # Grok Build's login as it was copied in
 
     def clean(self) -> None:
         """Take away what the run left, once the CLI has exited. Never fails: what can't be removed stays, and is
@@ -394,39 +392,55 @@ def _delete_rows(path: Path, find: Callable[[sqlite3.Connection], object],
 
 # ── Grok Build ────────────────────────────────────────────────────────────────
 
-# Grok Build's login, which it refreshes by itself, and the id it gives your computer
-GROK_LOGIN = "auth.json"
+# The id Grok Build gives your computer, and its own program (GROK_HOME/bin)
 GROK_DEVICE = "agent_id"
+GROK_PROGRAM = "grok.exe" if os.name == "nt" else "grok"
 
 
 def _write_private(path: Path, content: bytes) -> None:
-    with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)  # as it is, on Windows too
+    with open(os.open(path, flags, 0o600), "wb") as f:
         f.write(content)
 
 
 def _grok_run(folder: str | None, env: Mapping[str, str]) -> Run:
-    """A run of Grok Build in a home folder of its own, holding copies of your login and computer id, and your
-    default model as its only setting (a model of your own making isn't defined there, so it isn't)."""
+    """A run of Grok Build in a home folder of its own, holding a copy of your computer's id, a link to Grok Build's
+    own program, and a config with only your default model (a model of your own making isn't defined there, so it
+    isn't) and your skills in ~/.agents switched off. Your login stays where it is, and Grok Build is told where
+    (GROK_AUTH_PATH), so it refreshes it there under its own lock, as it does for any Grok Build of yours."""
     real = places(env).grok
     home = Path(tempfile.mkdtemp(prefix="ixel-grok-"))  # only you can open it
     run = Run("grok_build", folder or "", dict(env), frozenset(), home=str(home))
     try:
-        for name in (GROK_LOGIN, GROK_DEVICE):
-            try:
-                content = (real / name).read_bytes()
-            except OSError:
-                continue  # not signed in: Grok Build says so
-            _write_private(home / name, content)
-            if name == GROK_LOGIN:
-                run.login = content
+        try:
+            device = (real / GROK_DEVICE).read_bytes()
+        except OSError:
+            device = None  # Grok Build makes one
+        if device is not None:
+            _write_private(home / GROK_DEVICE, device)
+        _write_private(home / "config.toml", _grok_config(real, env).encode("utf-8"))
+        _link_grok_program(real, home)
         run.env_add["GROK_HOME"] = str(home)
-        model = _grok_default_model(real)
-        if model:
-            run.env_add["GROK_CONFIG"] = json.dumps({"models": {"default": model}})
+        run.env_add["GROK_AUTH_PATH"] = os.path.abspath(grok_login(env))
     except BaseException:
         run.drop()
         raise
     return run
+
+
+def _grok_config(real: Path, env: Mapping[str, str]) -> str:
+    """The run's Grok Build config. Grok Build reads skills in ~/.agents as well as its own, so those are hidden
+    (by your home folder as Grok Build finds it, and as Ixel does)."""
+    model = _grok_default_model(real)
+    home = Path(env.get("USERPROFILE" if os.name == "nt" else "HOME") or Path.home())
+    hidden = list(dict.fromkeys(["~/.agents", str(home / ".agents")]))
+    text = f"[models]\ndefault = {_toml_string(model)}\n\n" if model else ""
+    return text + f"[skills]\nignore = [{', '.join(map(_toml_string, hidden))}]\n"
+
+
+def _toml_string(text: str) -> str:
+    """A TOML string: JSON's escapes are TOML's, as long as nothing beyond ASCII is escaped (no surrogate pairs)."""
+    return json.dumps(text, ensure_ascii=False)
 
 
 def _grok_default_model(real: Path) -> str:
@@ -446,66 +460,28 @@ def _grok_default_model(real: Path) -> str:
     return model
 
 
-def _clean_grok(run: Run, where: Places) -> None:
-    """Copy a login Grok Build refreshed during the run back to yours, if yours is still the one copied in (it
-    might not let the old one be refreshed again). The run's home goes afterwards (Run.drop)."""
-    if run.login is None:
-        return
+def _link_grok_program(real: Path, home: Path) -> None:
+    """Grok Build's own program, linked into the run's home: its npm launcher (Windows keeps one) runs
+    GROK_HOME/bin/grok, and would otherwise unpack a new copy of it there, some 160 MB, for every question."""
     try:
-        new = (Path(run.home) / GROK_LOGIN).read_bytes()
-        refreshed = new != run.login and isinstance(json.loads(new), dict)
-    except (OSError, ValueError):
-        return  # signed out during the run: yours stays as it is
-    if not refreshed:
-        return
-    real = where.grok / GROK_LOGIN
-    with _grok_login_lock(real.parent) as locked:
+        program = (real / "bin" / GROK_PROGRAM).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return  # installed another way: there's nothing to link
+    (home / "bin").mkdir()
+    # A hard link on Windows (a symbolic one needs Developer Mode there), a symbolic one elsewhere (/tmp is
+    # often a filesystem of its own on Linux, where a hard link can't reach)
+    links = (os.link, os.symlink) if os.name == "nt" else (os.symlink, os.link)
+    for link in links:
         try:
-            unchanged = locked and real.read_bytes() == run.login
-        except OSError:
-            unchanged = False
-        if not unchanged:  # signed in again or refreshed meanwhile, or busy: yours is the newer one
-            logger.info("Grok Build refreshed its login during a question; yours had changed, so it stays")
+            link(program, home / "bin" / GROK_PROGRAM)
             return
-        temp = real.with_name(f".{GROK_LOGIN}.ixel-{uuid.uuid4().hex}.tmp")
-        try:
-            _write_private(temp, new)
-            os.replace(temp, real)
-        finally:
-            temp.unlink(missing_ok=True)
+        except OSError as exc:
+            reason = exc.strerror or type(exc).__name__
+    logger.info("Couldn't link Grok Build's program for a question (%s): it unpacks a copy of its own", reason)
 
 
-@contextmanager
-def _grok_login_lock(folder: Path) -> Iterator[bool]:
-    """Grok Build's own lock on its login (auth.json.lock), where there's flock; True while it's held, False when
-    a Grok Build of yours kept it longer than BUSY_SECONDS. Without flock (Windows), True straight away."""
-    try:
-        import fcntl
-    except ImportError:
-        yield True
-        return
-    try:
-        fd = os.open(folder / f"{GROK_LOGIN}.lock", os.O_RDWR | os.O_CREAT, 0o600)
-    except OSError:
-        yield False
-        return
-    try:
-        deadline = time.monotonic() + BUSY_SECONDS
-        while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except OSError:
-                if time.monotonic() > deadline:
-                    yield False
-                    return
-                time.sleep(0.1)
-        try:
-            yield True
-        finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-    finally:
-        os.close(fd)
+def _clean_grok(run: Run, where: Places) -> None:
+    """Nothing: what Grok Build kept of the question is in the run's home, which goes (Run.drop)."""
 
 
 CLEANERS: dict[str, Callable[[Run, Places], None]] = {

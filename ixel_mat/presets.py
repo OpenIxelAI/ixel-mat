@@ -293,10 +293,15 @@ def grok_home(env: Mapping[str, str]) -> Path:
     return Path(env.get("GROK_HOME") or Path(home) / ".grok")
 
 
+def grok_login(env: Mapping[str, str]) -> Path:
+    """Where Grok Build keeps your login: GROK_AUTH_PATH, or auth.json in its own folder."""
+    return Path(env.get("GROK_AUTH_PATH") or grok_home(env) / "auth.json")
+
+
 def grok_signed_in(env: Mapping[str, str]) -> bool:
     """Whether Grok Build has a login to use (only looks: nothing is read out of it)."""
     try:
-        return (grok_home(env) / "auth.json").stat().st_size > 2 or bool(env.get("GROK_AUTH"))
+        return grok_login(env).stat().st_size > 2 or bool(env.get("GROK_AUTH"))
     except OSError:
         return bool(env.get("GROK_AUTH"))
 
