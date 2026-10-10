@@ -104,7 +104,7 @@ def _grok_home(tmp_path: Path, config: str = "") -> Path:
     (real / "agent_id").write_bytes(b"device-1\n")
     (real / "sessions" / "yours.jsonl").write_text(YOURS)
     if config:
-        (real / "config.toml").write_text(config)
+        (real / "config.toml").write_text(config, encoding="utf-8")
     return real
 
 
@@ -604,7 +604,7 @@ home = pathlib.Path(os.environ["GROK_HOME"])
 pathlib.Path(os.environ["GROK_AUTH_PATH"]).write_text(json.dumps({"refreshed": True}))  # it refreshed your login
 pathlib.Path(os.environ["HOME"], "seen.json").write_text(json.dumps(
     {"prompt": str(prompt), "home": str(home), "question": question, "cwd": os.getcwd()}))
-print("391, says @\u2060me")
+sys.stdout.buffer.write("391, says @\u2060me\\n".encode("utf-8"))  # as Grok Build writes, on Windows too
 """
 
 
