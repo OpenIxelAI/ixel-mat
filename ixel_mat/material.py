@@ -1,10 +1,13 @@
 """
-Code for the panel to review: a git diff, files you name, or text you paste. Read-only.
+What a question is about: a git diff, files you name (code, text, documents such as Word or PDF, and
+pictures), or text you paste. Read-only.
 
 Ixel reads it once, before the panel starts: it runs nothing in your project and changes
-nothing, and the models get no file or shell access. The code goes into every round's prompt
+nothing, and the models get no file or shell access. The text goes into every round's prompt
 fenced with the run's random marker, like everything else the user or a model wrote, so a
-comment in it saying "ignore your instructions" is just more code to review.
+comment in it saying "ignore your instructions" is just more text to review. Documents are read
+into text on this computer (documents.py); pictures, yours and the ones in documents, go to the
+models that see pictures.
 
 It's kept apart from the question: the question is what's saved for follow-ups and what Triage
 sees, and the code shouldn't travel there.
@@ -29,6 +32,8 @@ DEFAULT_CODE_QUESTION = ("Review this change. Find bugs, security problems and a
                          "and say what should change before it's pushed. If it looks right, say so.")
 DEFAULT_FILES_QUESTION = ("Review this code. Find bugs, security problems and anything that would break, "
                           "and say what should change. If it looks right, say so.")
+DEFAULT_DOCUMENT_QUESTION = ("Read what's attached and check it: say what it gets wrong or leaves out, and what "
+                             "should change. If it's right, say so.")
 
 # Generated files that make a diff huge and aren't worth a model's reading
 LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "poetry.lock",
@@ -46,6 +51,8 @@ class Material:
     text: str
     files: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)  # for the user: what was left out, and why
+    pictures: list = field(default_factory=list)    # pictures.Picture: picture files, and the ones in documents
+    documents: bool = False                         # only documents and pictures, no code
 
     @property
     def chars(self) -> int:
@@ -53,10 +60,15 @@ class Material:
 
     def summary(self) -> str:
         files = f"{len(self.files)} file{'s' if len(self.files) != 1 else ''}, " if self.files else ""
-        return f"{files}{self.chars:,} characters"
+        pictures = len(self.pictures)
+        pictures = f", {pictures} picture{'s' if pictures != 1 else ''}" if pictures else ""
+        return f"{files}{self.chars:,} characters{pictures}"
 
     def to_dict(self) -> dict:
-        return {"title": self.title, "files": list(self.files), "chars": self.chars}
+        found = {"title": self.title, "files": list(self.files), "chars": self.chars}
+        if self.pictures:
+            found["pictures"] = len(self.pictures)
+        return found
 
 
 # ── Checks ────────────────────────────────────────────────────────────────────
@@ -165,6 +177,8 @@ def find_secret(material: Material) -> str | None:
 def check(material: Material, allow_secrets: bool = False) -> Material:
     """Refuse material that's empty, too big for the panel, or holds what looks like a secret."""
     if not material.text.strip():
+        if material.pictures:  # pictures alone
+            return material
         raise MaterialError("There's no code to review.")
     # Measured as the models will see it (hidden characters shown as [U+…]), so nothing that
     # passes is cut off later
@@ -440,63 +454,124 @@ def _new_files(top: str, names: list[str], room: int) -> tuple[str, list[str]]:
 
 
 def read_files(paths: list[str], cwd: str | os.PathLike | None = None) -> Material:
-    """Files you name, read as they are on disk."""
+    """Files you name, read as they are on disk: code and text as they are, documents (Word, PDF, Excel,
+    PowerPoint…) as their text (documents.py), and pictures (PNG or JPEG, and the ones in documents) for the
+    models that see pictures."""
+    from ixel_mat import documents
+    from ixel_mat.pictures import (MAX_BYTES, MAX_PER_QUESTION, MAX_PER_QUESTION_BYTES, PictureError, megabytes,
+                                   read_picture)
     if len(paths) > MAX_FILES:
         raise MaterialError(f"That's {len(paths)} files; up to {MAX_FILES} at a time.")
     base = Path(cwd or os.getcwd())
-    parts, names = [], []
+    parts, names, notes, pictures = [], [], [], []
+    code = False
+    room = MAX_MATERIAL_CHARS
     for given in paths:
         try:
             path = Path(given).expanduser()
             path = path if path.is_absolute() else base / path
             if not path.is_file():
                 raise MaterialError(f"{given}: {'is a folder, not a file' if path.is_dir() else 'no such file'}.")
-            if path.stat().st_size > MAX_MATERIAL_CHARS * 4:
-                raise MaterialError(f"{given} is too big to review ({path.stat().st_size:,} bytes).")
+            size = path.stat().st_size
+            picture, document = documents.is_picture(path.name), documents.is_document(path.name)
+            limit = MAX_BYTES if picture else documents.MAX_FILE_BYTES if document else MAX_MATERIAL_CHARS * 4
+            if size > limit and picture:
+                raise MaterialError(f"{given} is too big to send ({megabytes(size)}; a picture can be up to "
+                                    f"{megabytes(limit)}). The Ixel window makes big pictures smaller.")
+            if size > limit:
+                raise MaterialError(f"{given} is too big to review ({size:,} bytes"
+                                    + (f"; a document can be up to {megabytes(limit)})." if document else ")."))
             data = path.read_bytes()
         except (OSError, RuntimeError) as exc:  # locked, no permission, ~nosuchuser
             raise MaterialError(f"{given}: couldn't read it ({getattr(exc, 'strerror', None) or exc}).") from None
-        if data.startswith((b"\xff\xfe", b"\xfe\xff")):  # UTF-16, as PowerShell 5.1 writes
-            text = data.decode("utf-16", errors="replace")
-        elif b"\0" in data[:8192]:
-            raise MaterialError(f"{given} looks like a binary file, not code.")
-        else:
-            text = data.decode("utf-8-sig", errors="replace")
         try:
             name = str(path.resolve().relative_to(base.resolve())).replace("\\", "/")
         except (ValueError, OSError):
             name = str(given)
         names.append(name)
+        if picture:
+            if len(pictures) >= MAX_PER_QUESTION:
+                notes.append(f"{name} left out: a question takes at most {MAX_PER_QUESTION} pictures.")
+                continue
+            try:
+                pictures.append(read_picture(data))
+            except PictureError as exc:
+                raise MaterialError(f"{given}: {exc}") from None
+            parts.append(f"=== {name}: Picture {len(pictures)} ===")
+            room -= len(parts[-1]) + 2
+            continue
+        if document or data.startswith(b"%PDF-"):
+            if room < 500:
+                notes.append(f"{name} left out: there was no room left for it (the panel reads up to "
+                             f"{MAX_MATERIAL_CHARS:,} characters).")
+                continue
+            try:
+                found = documents.read_document(data, path.name, max_chars=room - len(name) - 40)
+            except documents.DocumentError as exc:
+                raise MaterialError(str(exc)) from None
+            taken, more, text = documents.pictures_of(found, MAX_PER_QUESTION - len(pictures), len(pictures) + 1)
+            pictures += taken
+            notes += found.notes + more
+            if text:
+                parts.append(f"=== {name} ({found.kind}) ===\n{text}")
+            else:
+                numbers = (f"Picture {len(pictures)}" if len(taken) == 1 else
+                           f"Pictures {len(pictures) - len(taken) + 1} to {len(pictures)}" if taken else "none sent")
+                parts.append(f"=== {name} ({found.kind}): no text, only pictures ({numbers}) ===")
+            room -= len(parts[-1]) + 2
+            continue
+        code = True
+        if data.startswith((b"\xff\xfe", b"\xfe\xff")):  # UTF-16, as PowerShell 5.1 writes
+            text = data.decode("utf-16", errors="replace")
+        elif b"\0" in data[:8192]:
+            raise MaterialError(f"{given} looks like a binary file, not code or a document Ixel reads.")
+        else:
+            text = data.decode("utf-8-sig", errors="replace")
         parts.append(f"=== {name} ===\n{text.replace(chr(13) + chr(10), chr(10))}")
-    if not parts:
+        room -= len(parts[-1]) + 2
+    if not names:
         raise MaterialError("Name at least one file.")
-    return Material(title="files the user chose", text="\n\n".join(parts), files=names)
+    total = 0
+    for i, picture in enumerate(pictures):
+        total += len(picture.data)
+        if total > MAX_PER_QUESTION_BYTES:
+            notes.append(f"Pictures {i + 1} to {len(pictures)} left out: together the pictures are over "
+                         f"{megabytes(MAX_PER_QUESTION_BYTES)}, more than a model takes in one question.")
+            pictures = pictures[:i]
+            break
+    return Material(title="files the user chose", text="\n\n".join(parts), files=names, notes=notes,
+                    pictures=pictures, documents=not code)
 
 
 def combine(*materials: Material | None) -> Material | None:
     found = [m for m in materials if m is not None]
     if len(found) <= 1:
         return found[0] if found else None
-    return Material(title=" and ".join(m.title for m in found), text="\n\n".join(m.text for m in found),
-                    files=[f for m in found for f in m.files], notes=[n for m in found for n in m.notes])
+    return Material(title=" and ".join(m.title for m in found), text="\n\n".join(m.text for m in found if m.text),
+                    files=[f for m in found for f in m.files], notes=[n for m in found for n in m.notes],
+                    pictures=[p for m in found for p in m.pictures], documents=all(m.documents for m in found))
 
 
 def code_for_review(question: str, diff: str | None = None, base: str | None = None, files: list[str] | None = None,
                     code: str | None = None, code_title: str = "code the user attached",
                     allow_secrets: bool = False, new_files: bool = False,
-                    head: str | None = None) -> tuple[Material | None, str]:
+                    head: str | None = None, documents: bool = False) -> tuple[Material | None, str]:
     """
-    What every front end does with the code a review asked for: a git diff (see git_diff), files, and/or
-    code pasted in, read and checked, and the question to ask about it, which is the one given or, when
-    that's blank, a default for a diff or for code. (None, question) when there's no code; MaterialError
+    What every front end does with the code a review asked for: a git diff (see git_diff), files (code,
+    documents, pictures), and/or code pasted in, read and checked, and the question to ask about it, which is
+    the one given or, when that's blank, a default for a diff, for code or for documents. documents: what was
+    pasted is documents' text (the Ixel window read them). (None, question) when there's nothing; MaterialError
     when there is and it can't be sent.
     """
+    typed = pasted(code, code_title) if code and code.strip() else None
+    if typed is not None:
+        typed.documents = documents
     material = combine(git_diff(diff, base, new_files=new_files, head_ref=head) if diff else None,
-                       read_files(files) if files else None,
-                       pasted(code, code_title) if code and code.strip() else None)
+                       read_files(files) if files else None, typed)
     if material is None:
         return None, question
     check(material, allow_secrets=allow_secrets)
     if not question.strip():
-        question = DEFAULT_CODE_QUESTION if diff else DEFAULT_FILES_QUESTION
+        question = DEFAULT_CODE_QUESTION if diff else DEFAULT_DOCUMENT_QUESTION if material.documents \
+            else DEFAULT_FILES_QUESTION
     return material, question
