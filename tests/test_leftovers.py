@@ -122,7 +122,9 @@ def test_grok_build_gets_a_home_of_its_own_and_your_login_where_it_is(folder, tm
     assert run.env_add == {"GROK_HOME": str(home), "GROK_AUTH_PATH": str(real / "auth.json")} and run.args == []
     assert sorted(p.name for p in home.iterdir()) == ["agent_id", "config.toml"]
     assert (home / "agent_id").read_bytes() == b"device-1\n"  # as it is, on Windows too
-    assert _grok_config(run) == {"skills": {"ignore": ["~/.agents", str(tmp_path / "home" / ".agents")]}}
+    agents = tmp_path / "home" / ".agents"
+    hidden = list(dict.fromkeys(["~/.agents", str(agents), os.path.realpath(agents)]))
+    assert _grok_config(run) == {"skills": {"ignore": hidden}}
     if os.name != "nt":
         assert home.stat().st_mode & 0o077 == 0 and (home / "config.toml").stat().st_mode & 0o077 == 0
     (home / "sessions").mkdir()

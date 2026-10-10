@@ -430,10 +430,10 @@ def _grok_run(folder: str | None, env: Mapping[str, str]) -> Run:
 
 def _grok_config(real: Path, env: Mapping[str, str]) -> str:
     """The run's Grok Build config. Grok Build reads skills in ~/.agents as well as its own, so those are hidden
-    (by your home folder as Grok Build finds it, and as Ixel does)."""
+    (by your home folder as Grok Build finds it, as Ixel does, and with links resolved)."""
     model = _grok_default_model(real)
     home = Path(env.get("USERPROFILE" if os.name == "nt" else "HOME") or Path.home())
-    hidden = list(dict.fromkeys(["~/.agents", str(home / ".agents")]))
+    hidden = list(dict.fromkeys(["~/.agents", str(home / ".agents"), os.path.realpath(home / ".agents")]))
     text = f"[models]\ndefault = {_toml_string(model)}\n\n" if model else ""
     return text + f"[skills]\nignore = [{', '.join(map(_toml_string, hidden))}]\n"
 
@@ -477,7 +477,8 @@ def _link_grok_program(real: Path, home: Path) -> None:
             return
         except OSError as exc:
             reason = exc.strerror or type(exc).__name__
-    logger.info("Couldn't link Grok Build's program for a question (%s): it unpacks a copy of its own", reason)
+    logger.warning("Couldn't link Grok Build's program for a question (%s): it unpacks a copy of its own, which is "
+                   "slower", reason)
 
 
 def _clean_grok(run: Run, where: Places) -> None:
