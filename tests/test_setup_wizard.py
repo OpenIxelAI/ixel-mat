@@ -128,7 +128,8 @@ def test_cli_presets_are_answer_only_and_never_bypass_safety():
     ("@/etc/passwd", "@\u2060/etc/passwd"),                 # a path Grok Build would read into the question
     ("look\t@../secret and @notes.txt", "look\t@\u2060../secret and @\u2060notes.txt"),
     ("x\u3000@~/.env (@y) \\@z", "x\u3000@\u2060~/.env (@\u2060y) \\@\u2060z"),
-    ("mail a@b.com, @ alone, @\u2060done", "mail a@b.com, @ alone, @\u2060done"),  # inside a word, or already
+    ("@ /etc/passwd @\n\n../x", "@\u2060 /etc/passwd @\u2060\n\n../x"),  # it reads past spaces and blank lines
+    ("mail a@b.com, @\u2060done", "mail a@b.com, @\u2060done"),  # inside a word, or already
 ])
 def test_grok_build_reads_no_file_for_an_at_in_the_question(text, safe):
     from ixel_mat.presets import own_answer, safe_question

@@ -268,11 +268,12 @@ def plain_error(preset_id: str, stderr: str) -> str | None:
 # ── Grok Build's @ ────────────────────────────────────────────────────────────
 
 # Grok Build reads a file into the question for each @ that begins a word and names one (@/etc/passwd, @../notes,
-# or @notes.txt in the folder it runs in), with --verbatim and with its read tool denied alike. A word joiner right
-# after the @ (invisible, and the model still reads the @) stops that, and comes out of the answer again, so code
-# quoted back (a decorator) still runs. An @ inside a word (an email address) is left as it is.
+# or @notes.txt in the folder it runs in), even with spaces or blank lines between the @ and the name, with
+# --verbatim and with its read tool denied alike. A word joiner right after the @ (invisible, and the model still
+# reads the @) stops that, and comes out of the answer again, so code quoted back (a decorator) still runs. An @
+# inside a word (an email address) is left as it is.
 WORD_JOINER = "\u2060"
-_GROK_MENTION = re.compile(r"(?<![^\W_])@(?=[^\s\u2060])")
+_GROK_MENTION = re.compile(r"(?<![^\W_])@(?!\u2060)")
 _MENTION_SAFE = {"grok_build"}
 
 

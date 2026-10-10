@@ -293,7 +293,8 @@ def test_grok_build_uses_your_default_model_and_reads_no_file_for_an_at(tmp_path
         fields = {k: v for k, v in preset.items() if k not in PRESET_ABOUT}
         _grok(home, tmp_path, fake.url, monkeypatch, fields)
         agent = OneShotAgent(AgentConfig(name="grok_build", type="oneshot", workdir=str(workdir), **fields))
-        answer = _ask(agent, f"Look at @{secret} and\t@notes.txt and @../secret.txt, then answer @me.")
+        answer = _ask(agent, f"Look at @{secret} and\t@notes.txt and @../secret.txt and @  {secret} and @\n\n"
+                             "notes.txt, then answer @me.")
     assert ANSWER in answer and "\u2060" not in answer
     assert fake.requests, "Grok Build never called the fake model"
     for request in fake.requests:

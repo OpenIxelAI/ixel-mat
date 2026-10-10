@@ -150,9 +150,10 @@ files. Ixel uses them only to answer, and for each preset:
   (`XAI_API_KEY`, `GROK_CODE_XAI_API_KEY`) is dropped, so your SuperGrok or X Premium login is what's used.
   Checked against Grok Build 1.0.46.
 - **No file read for an `@` (Grok Build).** Grok Build reads a file into the question for every `@` that
-  starts a word and names one (`@/etc/passwd`, `@../notes`, or `@notes.txt` in the folder it runs in), with
-  its read tool denied and `--verbatim` alike, and a question can quote anything (a model's answer, in a
-  review). Ixel puts an invisible word joiner (U+2060) right after each such `@`, so the model still sees the
+  starts a word and names one (`@/etc/passwd`, `@../notes`, or `@notes.txt` in the folder it runs in), even
+  with spaces or blank lines between the `@` and the name, with its read tool denied and `--verbatim` alike,
+  and a question can quote anything (a model's answer, in a review). Ixel puts an invisible word joiner
+  (U+2060) right after every `@` that starts a word, so the model still sees the
   `@` but Grok Build reads nothing, and takes the joiners out of the answer again, so code quoted back (a
   decorator) still runs. An `@` inside a word (an email address) is left as it is.
 - **A fresh empty folder** for every run, deleted afterwards (`workdir = "temp"`).
