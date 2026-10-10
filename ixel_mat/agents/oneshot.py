@@ -430,7 +430,8 @@ class OneShotAgent(BaseAgent):
             try:
                 if self.config.stdout_format == "claude-stream-json":
                     reading = _read_claude_stream(proc, stdin_data, _as_answer(on_text, preset_id), on_usage,
-                                                  self.config.label or self.config.command, preset_id)
+                                                  preset_for(self.config.command).get("label", "Claude Code"),
+                                                  preset_id)
                 else:
                     reading = proc.communicate(stdin_data)
                 stdout, stderr = await asyncio.wait_for(reading, timeout=self.timeout)
