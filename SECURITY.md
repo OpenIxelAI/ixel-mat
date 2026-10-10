@@ -145,10 +145,11 @@ files. Ixel uses them only to answer, and for each preset:
   program (`~/.grok/bin/grok`, so its npm launcher doesn't unpack a new copy for each question), and a config
   of Ixel's: your default model (unless it's a model you defined yourself, which isn't defined there), and
   your skills in `~/.agents` switched off (Grok Build reads them as well as its own). Nothing else of yours is
-  in it. Your login stays where it is, and Grok Build is told where (`GROK_AUTH_PATH`), so it refreshes it
+  in it, so no folder is trusted either (Grok Build keeps that list there): in a folder of yours (a `workdir`),
+  the project's notes, rules, skills, MCP servers and hooks aren't loaded. Your login stays where it is, and Grok Build is told where (`GROK_AUTH_PATH`), so it refreshes it
   there under its own lock, as it does for any Grok Build of yours. The folder is deleted after the run, with
   the session Grok Build kept in it. An API key in your environment (`XAI_API_KEY`, `GROK_CODE_XAI_API_KEY`)
-  is dropped, so your SuperGrok or X Premium login is what's used. Checked against Grok Build 1.0.46.
+  is dropped, so your xAI login (SuperGrok) is what's used. Checked against Grok Build 1.0.46.
 - **No file read for an `@` (Grok Build).** Grok Build reads a file into the question for every `@` that
   starts a word and names one (`@/etc/passwd`, `@../notes`, or `@notes.txt` in the folder it runs in), even
   with spaces or blank lines between the `@` and the name, with its read tool denied and `--verbatim` alike,

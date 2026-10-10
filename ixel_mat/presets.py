@@ -143,7 +143,7 @@ CLI_PRESETS = [
     },
     {
         "id": "grok_build", "label": "Grok Build", "command": "grok",
-        "why": "uses your SuperGrok or X Premium login",
+        "why": "uses your SuperGrok login",
         "install": "npm install -g @xai-official/grok",
         # --disallowed-tools takes every tool away by its own name (--tools with a name that doesn't exist leaves
         # them all), and the --deny rules stop each kind again. --verbatim: the question goes as it is, never read
@@ -230,7 +230,7 @@ COPILOT_TOO_OLD = ("This Copilot is older than Ixel needs (1.0.52, May 2026): ru
                    "or take Copilot off the panel.")
 # Grok Build with no login (grok login saves one in ~/.grok/auth.json)
 GROK_SIGN_IN = ("Grok Build isn't signed in: run grok login once (it opens your browser to sign in to your "
-                "SuperGrok or X Premium account), or take Grok Build off the panel.")
+                "xAI account, such as SuperGrok), or take Grok Build off the panel.")
 # What a preset's CLI says on stderr when it can't start on a question at all, and what to tell you instead
 PLAIN_ERRORS = {"grok_build": {"Not signed in": GROK_SIGN_IN},
                 "gemini_cli": {"Please set an Auth method": GEMINI_SIGN_IN},

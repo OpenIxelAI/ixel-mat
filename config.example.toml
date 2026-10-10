@@ -127,7 +127,7 @@ preset = "copilot"
 [agents.opencode]
 preset = "opencode"
 
-# Grok Build (`grok`), signed in with your SuperGrok or X Premium account
+# Grok Build (`grok`), signed in with your xAI account (SuperGrok)
 # (`grok login`). Each question runs in a home folder of its own, so your Grok
 # Build config, MCP servers, hooks, skills and sessions stay out of it.
 [agents.grok_build]

@@ -14,6 +14,7 @@ import shutil
 import sqlite3
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -304,6 +305,36 @@ def test_grok_build_uses_your_default_model_and_reads_no_file_for_an_at(tmp_path
         assert SECRET not in request["raw"], "Grok Build read a file named after an @ into the question"
     assert any(r["body"].get("model") == GROK_DEFAULT for r in fake.requests), "your default model wasn't used"
     assert not list(home.joinpath(".grok").glob("sessions*")), "Grok Build kept the question in your own folder"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="like the others here")
+def test_grok_build_in_a_project_of_yours_takes_none_of_its_settings(tmp_path, monkeypatch):
+    # An agent pointed at your project (its workdir): Grok Build reads no notes, rules or skills of the project's
+    # and starts none of its MCP servers or hooks, in the folder it runs in or at the top of the repository
+    home = _grok_env(tmp_path, monkeypatch)
+    project = tmp_path / "project"
+    marker = tmp_path / "PWNED_PROJECT"
+    hook = {"hooks": [{"type": "command", "command": f"touch '{marker}'"}]}
+    for folder in (project, project / "src"):
+        _write(folder / "AGENTS.md", f"{HOME_NOTE}\n")
+        _write(folder / "GROK.md", f"{HOME_NOTE}\n")
+        _write(folder / ".grok" / "rules" / "trap.md", f"{HOME_NOTE}\n")
+        _write(folder / ".mcp.json", json.dumps({"mcpServers": {"trap": {"command": "sh", "args": ["-c", f"touch '{marker}'"]}}}))
+        _write(folder / ".grok" / "config.toml", f'[mcp_servers.trap]\ncommand = "sh"\nargs = ["-c", "touch {marker}"]\n')
+        _write(folder / ".grok" / "hooks" / "trap.json", json.dumps({"hooks": {"SessionStart": [hook], "UserPromptSubmit": [hook]}}))
+        for skills in (".grok", ".agents"):
+            _write(folder / skills / "skills" / "trap" / "SKILL.md", f"---\nname: trap\ndescription: {HOME_NOTE}\n---\n")
+    (project / ".git").mkdir()
+    preset = PRESETS["grok_build"]
+    with CaptureServer() as fake:
+        fields = {k: v for k, v in preset.items() if k not in PRESET_ABOUT}
+        _grok(home, tmp_path, fake.url, monkeypatch, fields)
+        agent = OneShotAgent(AgentConfig(name="grok_build", type="oneshot", workdir=str(project / "src"), **fields))
+        assert ANSWER in _ask(agent, "What is 2+2?")
+    time.sleep(1)  # what it started has had time to leave its file
+    assert fake.requests, "Grok Build never called the fake model"
+    assert not any(HOME_NOTE in r["raw"] for r in fake.requests), "your project's notes or skills reached the model"
+    assert not marker.exists(), "Grok Build started your project's MCP server or hook"
 
 
 class _Catalog:
